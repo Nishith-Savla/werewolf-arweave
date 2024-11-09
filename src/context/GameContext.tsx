@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useContext, useEffect, useState, useMemo } from "react";
+import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from "react";
 
 type GameMode = "landing" | "waiting" | "night" | "day";
 
@@ -12,7 +12,7 @@ interface Player {
 
 interface GameState {
 	gameProcess: string;
-	currentPhase: string;
+	phase: string;
 	currentRound: number;
 	currentTimestamp: number;
 }
@@ -34,12 +34,21 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
 	const [mode, setMode] = useState<GameMode>("landing");
 	const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null);
 	const [joinedPlayers, setJoinedPlayers] = useState<Player[]>([]);
-	const [gameState, setGamestate] = useState<GameState>({
-		gameProcess: "3KCI673j46LliB_7VBBfBOxbZsaoxU0Q8dbzLcItXRk",
-		currentPhase: "lobby",
+	const [gameState, setGamestate] = useState<any>({
+		gameProcess: "hvWU6L4AzaP5zy_5syA6Hn2IHEgzQdimUZSsEmkHheY",
+		phase: "lobby",
 		currentRound: 0,
 		currentTimestamp: 0,
 	});
+
+	useEffect(() => {
+		console.log("GameContext state updated:", {
+			mode,
+			currentPlayer,
+			gameState,
+			joinedPlayers,
+		});
+	}, [mode, currentPlayer, gameState, joinedPlayers]);
 
 	const contextValue = useMemo(
 		() => ({
@@ -55,19 +64,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
 		[mode, currentPlayer, joinedPlayers, gameState]
 	);
 
-	useEffect(() => {
-		console.log("Mode changed:", mode);
-	}, [mode]);
-
-	useEffect(() => {
-		console.log("Current player changed:", currentPlayer);
-	}, [currentPlayer]);
-
-	return (
-		<GameContext.Provider value={contextValue}>
-			{children}
-		</GameContext.Provider>
-	);
+	return <GameContext.Provider value={contextValue}>{children}</GameContext.Provider>;
 };
 
 export const useGameContext = () => {

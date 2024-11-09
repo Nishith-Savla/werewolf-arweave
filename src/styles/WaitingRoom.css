@@ -1,19 +1,133 @@
 .waiting-room {
-  @apply max-w-2xl mx-auto p-8;
+	@apply max-w-2xl mx-auto p-8;
 }
 
 .players-list {
-  @apply space-y-4;
+	@apply space-y-4;
 }
 
 .player-card {
-  @apply flex justify-between items-center p-4 bg-card rounded-lg border;
+	@apply flex justify-between items-center p-4 bg-card rounded-lg border;
 }
 
 .creator-badge {
-  @apply bg-yellow-200 text-yellow-800 px-2 py-1 rounded-md text-sm font-medium;
+	@apply bg-yellow-200 text-yellow-800 px-2 py-1 rounded-md text-sm font-medium;
 }
 
 .actions {
-  @apply flex gap-4 justify-center mt-8;
-} 
+	@apply flex gap-4 justify-center mt-8;
+}
+
+/* Waiting Room Container */
+.waiting-room {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: 2rem;
+	background: #1e1e2f;
+	color: #ffffff;
+	min-height: 100vh;
+	text-align: center;
+	font-family: "Arial", sans-serif;
+}
+
+/* Title Styling */
+.waiting-room h2 {
+	font-size: 2.5rem;
+	color: #f4a261;
+	margin-bottom: 1rem;
+}
+
+/* Players List */
+.players-list {
+	background-color: #252541;
+	border-radius: 10px;
+	padding: 1.5rem;
+	width: 100%;
+	max-width: 500px;
+	box-shadow: 0px 8px 20px rgba(0, 0, 0, 0.3);
+	text-align: left;
+}
+
+.players-list h3 {
+	font-size: 1.5rem;
+	color: #e9c46a;
+	margin-bottom: 1rem;
+}
+
+/* Player Card */
+.player-card {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0.8rem;
+	background-color: #333356;
+	border-radius: 6px;
+	margin-bottom: 0.5rem;
+	color: #ffffff;
+	font-size: 1rem;
+	font-weight: 500;
+}
+
+/* Creator Badge */
+.creator-badge {
+	background-color: #e76f51;
+	color: #ffffff;
+	font-size: 0.9rem;
+	font-weight: bold;
+	padding: 0.2rem 0.6rem;
+	border-radius: 4px;
+}
+
+/* Actions */
+.actions {
+	display: flex;
+	gap: 1rem;
+	margin-top: 2rem;
+}
+
+.actions .button {
+	padding: 0.8rem 1.5rem;
+	font-size: 1rem;
+	font-weight: bold;
+	border-radius: 8px;
+	cursor: pointer;
+	transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+/* Start Game Button */
+.actions .button.start-game {
+	background-color: #2a9d8f;
+	color: #ffffff;
+}
+
+.actions .button.start-game:hover {
+	background-color: #21867a;
+	transform: scale(1.05);
+}
+
+.actions .button.start-game:disabled {
+	background-color: #b4b4d3;
+	cursor: not-allowed;
+}
+
+/* Leave Room Button */
+.actions .button.leave-room {
+	background-color: transparent;
+	color: #e76f51;
+	border: 2px solid #e76f51;
+}
+
+.actions .button.leave-room:hover {
+	background-color: #e76f51;
+	color: #ffffff;
+	transform: scale(1.05);
+}
+
+/* Waiting Text for Non-Creators */
+.text-muted-foreground {
+	color: #b4b4d3;
+	font-size: 1rem;
+	margin-top: 1rem;
+}

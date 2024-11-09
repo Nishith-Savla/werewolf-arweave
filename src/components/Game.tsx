@@ -1,26 +1,20 @@
-import { useConnection } from 'arweave-wallet-kit';
-import { useGameContext } from '../context/GameContext';
-import { LandingPage } from './LandingPage';
-import { WaitingRoom } from './WaitingRoom';
-import { GameRound } from './GameRound';
-import { useEffect } from 'react';
+import { WaitingRoom } from "./WaitingRoom";
+import { LandingPage } from "./LandingPage";
+import { GameRound } from "./GameRound";
+import { useGameContext } from "../context/GameContext";
 
 export const Game = () => {
-  const { mode, setMode, setCurrentPlayer } = useGameContext();
-  const { connected } = useConnection();
+    const { mode } = useGameContext();
 
-  useEffect(() => {
-    if (!connected) {
-      setMode("landing");
-      setCurrentPlayer(null);
+    switch (mode) {
+        case "landing":
+            return <LandingPage />;
+        case "waiting":
+            return <WaitingRoom />;
+        case "night":
+        case "day":
+            return <GameRound />;
+        default:
+            return <LandingPage />;
     }
-  }, [connected, setMode, setCurrentPlayer]);
-
-  return (
-    <div className="game-container">
-      {mode === "landing" && <LandingPage />}
-      {mode === "waiting" && <WaitingRoom />}
-      {(mode === "night" || mode === "day") && <GameRound />}
-    </div>
-  );
 }; 

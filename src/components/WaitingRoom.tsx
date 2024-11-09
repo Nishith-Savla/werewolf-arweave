@@ -1,7 +1,9 @@
 import { Button } from "@/components/ui/button";
+import { GameState } from "@/types/game";
 import { useCallback, useEffect, useState } from "react";
 import { useGameContext } from "../context/GameContext";
 import { dryrunResult, messageResult } from "../lib/utils";
+import "./WaitingRoom.css";
 
 interface PlayerResponse {
 	id?: string;
@@ -12,8 +14,15 @@ interface PlayerResponse {
 }
 
 export const WaitingRoom = () => {
-	const { currentPlayer, joinedPlayers, setJoinedPlayers, setMode, gameState, setCurrentPlayer } =
-		useGameContext();
+	const {
+		currentPlayer,
+		joinedPlayers,
+		setJoinedPlayers,
+		setMode,
+		gameState,
+		setGamestate,
+		setCurrentPlayer,
+	} = useGameContext();
 	const [isLoading, setIsLoading] = useState(true);
 
 	console.log("Current player:", currentPlayer);
@@ -31,6 +40,17 @@ export const WaitingRoom = () => {
 				},
 			]);
 			console.log("Game state result:", gameStateResult);
+
+			// If game state is night, we should transition to night mode
+			if (gameStateResult?.phase === "night") {
+				setGamestate((prevState) => ({
+					...prevState,
+					phase: "night",
+				}));
+				setMode("night");
+				setIsLoading(false);
+				return;
+			}
 
 			// Try Get-Players only if game state indicates we need to
 			if (gameStateResult?.phase === "lobby") {
@@ -73,8 +93,16 @@ export const WaitingRoom = () => {
 			}
 		} catch (error) {
 			console.error("Error fetching players:", error);
+			setIsLoading(false);
 		}
-	}, [gameState.gameProcess, currentPlayer, setCurrentPlayer, joinedPlayers]);
+	}, [
+		gameState.gameProcess,
+		currentPlayer,
+		setCurrentPlayer,
+		joinedPlayers,
+		setMode,
+		setGamestate,
+	]);
 
 	useEffect(() => {
 		if (!gameState.gameProcess) return;
@@ -83,7 +111,7 @@ export const WaitingRoom = () => {
 		fetchPlayers();
 
 		// Set up interval
-		const interval = setInterval(fetchPlayers, 5000);
+		const interval = setInterval(fetchPlayers, 10000);
 
 		// Cleanup
 		return () => {
@@ -128,9 +156,42 @@ export const WaitingRoom = () => {
 		checkRegistration();
 	}, [gameState.gameProcess, setMode, currentPlayer?.id]);
 
-	if (isLoading) {
-		return <div className="waiting-room">Loading...</div>;
-	}
+	useEffect(() => {
+		if (!currentPlayer?.isCreator) {
+			const checkGameState = async () => {
+				try {
+					const gameStateResult = await dryrunResult(gameState.gameProcess, [
+						{
+							name: "Action",
+							value: "Get-Game-State",
+						},
+					]);
+
+					if (gameStateResult?.phase === "night") {
+						const { Messages: roleMessages } = await messageResult(gameState.gameProcess, [
+							{
+								name: "Action",
+								value: "Get-Role",
+							},
+						]);
+
+						if (roleMessages?.[0]?.Data) {
+							setGamestate((prevState: GameState) => ({
+								...prevState,
+								phase: "night",
+							}));
+							setMode("night");
+						}
+					}
+				} catch (error) {
+					console.error("Error checking game state:", error);
+				}
+			};
+
+			const interval = setInterval(checkGameState, 10000);
+			return () => clearInterval(interval);
+		}
+	}, [currentPlayer?.isCreator, gameState.gameProcess]);
 
 	const handleStartGame = async () => {
 		if (!currentPlayer?.isCreator) {
@@ -139,30 +200,46 @@ export const WaitingRoom = () => {
 		}
 
 		try {
+			setIsLoading(true);
 			console.log("Starting game...");
-			const { Messages } = await messageResult(gameState.gameProcess, [
+
+			// Start the game
+			const startResult = await messageResult(gameState.gameProcess, [
 				{
 					name: "Action",
 					value: "Start-Game",
 				},
 			]);
 
-			console.log("Start game response:", Messages);
+			console.log("Start game response:", startResult);
 
-			// Check for both possible response formats
-			if (
-				Messages?.[0]?.Data === "Game started" ||
-				Messages?.[0]?.Data?.status === "Game started"
-			) {
-				console.log("Game started successfully");
+			// Verify game state
+			const gameStateResult = await dryrunResult(gameState.gameProcess, [
+				{
+					name: "Action",
+					value: "Get-Game-State",
+				},
+			]);
+
+			console.log("Game state after start:", gameStateResult);
+
+			if (gameStateResult?.phase === "night") {
+				// Update game state first
+				setGamestate((prevState: GameState) => ({
+					...prevState,
+					phase: "night",
+				}));
+
+				// Then update mode
 				setMode("night");
+				setIsLoading(false);
 			} else {
-				console.warn("Unexpected response:", Messages?.[0]?.Data);
-				alert("Failed to start game. Please try again.");
+				throw new Error(`Unexpected game state: ${gameStateResult?.phase}`);
 			}
-		} catch (error) {
+		} catch (error: any) {
 			console.error("Error starting game:", error);
-			alert("Failed to start game. Please try again.");
+			setIsLoading(false);
+			alert(`Failed to start game: ${error.message}`);
 		}
 	};
 
@@ -182,6 +259,10 @@ export const WaitingRoom = () => {
 			console.error("Error leaving room:", error);
 		}
 	};
+
+	if (isLoading) {
+		return <div className="waiting-room">Loading...</div>;
+	}
 
 	return (
 		<div className="waiting-room">

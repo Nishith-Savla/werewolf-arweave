@@ -3,6 +3,7 @@ import { ConnectButton, useActiveAddress, useConnection } from "arweave-wallet-k
 import { useEffect } from "react";
 import { useGameContext } from "../context/GameContext";
 import { dryrunResult, formatAddress, messageResult } from "../lib/utils";
+import "./LandingPage.css";
 
 export const LandingPage = () => {
 	const { currentPlayer, setCurrentPlayer, gameState } = useGameContext();
