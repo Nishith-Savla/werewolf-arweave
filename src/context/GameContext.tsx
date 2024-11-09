@@ -1,6 +1,6 @@
 import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from "react";
 
-type GameMode = "landing" | "waiting" | "night" | "day";
+export type GameMode = "landing" | "waiting" | "night" | "day";
 
 interface Player {
 	id: string;

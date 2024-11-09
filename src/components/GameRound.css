@@ -1,0 +1,28 @@
+.night-actions,
+.day-actions {
+    @apply bg-gray-50 p-6 rounded-lg shadow-sm;
+}
+
+.action-result {
+    @apply text-blue-800 bg-blue-50 p-3 rounded-md;
+}
+
+.visions-log {
+    @apply bg-indigo-50 p-4 rounded-md;
+}
+
+.action-buttons {
+    @apply flex flex-wrap justify-center gap-4;
+}
+
+.player-selection {
+    @apply max-w-md mx-auto;
+}
+
+button:disabled {
+    @apply opacity-50 cursor-not-allowed;
+}
+
+.game-info {
+    @apply text-center bg-white p-4 rounded-lg shadow-sm;
+}

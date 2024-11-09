@@ -31,8 +31,6 @@ export const WaitingRoom = () => {
 	const fetchPlayers = useCallback(async () => {
 		try {
 			console.log("Fetching players for process:", gameState.gameProcess);
-
-			// First try to get the game state
 			const gameStateResult = await dryrunResult(gameState.gameProcess, [
 				{
 					name: "Action",
@@ -40,10 +38,8 @@ export const WaitingRoom = () => {
 				},
 			]);
 			console.log("Game state result:", gameStateResult);
-
-			// If game state is night, we should transition to night mode
 			if (gameStateResult?.phase === "night") {
-				setGamestate((prevState) => ({
+				setGamestate((prevState: GameState) => ({
 					...prevState,
 					phase: "night",
 				}));
@@ -51,8 +47,6 @@ export const WaitingRoom = () => {
 				setIsLoading(false);
 				return;
 			}
-
-			// Try Get-Players only if game state indicates we need to
 			if (gameStateResult?.phase === "lobby") {
 				const result = await dryrunResult(gameState.gameProcess, [
 					{
@@ -60,7 +54,6 @@ export const WaitingRoom = () => {
 						value: "Get-Players",
 					},
 				]);
-
 				if (result && Array.isArray(result)) {
 					const validPlayers = result
 						.filter((player): player is PlayerResponse => !!player)
@@ -71,8 +64,6 @@ export const WaitingRoom = () => {
 							isAlive: true,
 						}))
 						.filter((player) => player.id && player.name);
-
-					// Update current player's creator status if needed
 					if (currentPlayer) {
 						const playerData = validPlayers.find((p) => p.id === currentPlayer.id);
 						if (playerData?.isCreator) {
@@ -82,8 +73,6 @@ export const WaitingRoom = () => {
 							});
 						}
 					}
-
-					// Only set loading and update if players have changed
 					if (JSON.stringify(validPlayers) !== JSON.stringify(joinedPlayers)) {
 						setIsLoading(true);
 						setJoinedPlayers(validPlayers);
@@ -93,16 +82,8 @@ export const WaitingRoom = () => {
 			}
 		} catch (error) {
 			console.error("Error fetching players:", error);
-			setIsLoading(false);
 		}
-	}, [
-		gameState.gameProcess,
-		currentPlayer,
-		setCurrentPlayer,
-		joinedPlayers,
-		setMode,
-		setGamestate,
-	]);
+	}, [gameState.gameProcess, currentPlayer, setCurrentPlayer, joinedPlayers]);
 
 	useEffect(() => {
 		if (!gameState.gameProcess) return;

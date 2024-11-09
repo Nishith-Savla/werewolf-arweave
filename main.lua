@@ -16,13 +16,24 @@ admin:exec([[
     is_creator BOOLEAN DEFAULT FALSE,
     votes INTEGER DEFAULT 0
   );
+]])
 
+admin:exec([[
   CREATE TABLE IF NOT EXISTS game_state (
     id INTEGER PRIMARY KEY,
     phase TEXT DEFAULT 'lobby',
     round INTEGER DEFAULT 0,
     timestamp INTEGER DEFAULT 0
   );
+]])
+
+admin:exec([[
+    CREATE TABLE IF NOT EXISTS votes (
+    voter TEXT PRIMARY KEY,
+    voted_for TEXT,
+    FOREIGN KEY(voter) REFERENCES players(id),
+    FOREIGN KEY(voted_for) REFERENCES players(id)
+);
 ]])
 
 -- Game state variables
@@ -34,16 +45,20 @@ GameState = {
     maxPlayers = 8
 }
 
--- Available roles
-Roles = {
+-- Required roles that must be assigned
+RequiredRoles = {
     "werewolf",
-    "werewolf",
-    "villager",
-    "villager",
-    "villager",
-    "villager",
+    "villager", 
     "seer",
     "doctor"
+}
+
+-- Additional roles based on player count
+ExtraRoles = {
+    "werewolf",
+    "villager",
+    "villager",
+    "villager"
 }
 
 -- Register new player
@@ -86,7 +101,7 @@ Handlers.add(
         admin:apply('DELETE FROM players WHERE id = ?;', { msg.From })
         
         -- If creator leaves, assign new creator
-        local creator = admin:select('SELECT id FROM players WHERE is_creator = TRUE;')
+        local creator = admin:select('SELECT id FROM players WHERE is_creator = TRUE;', {})
         if #creator == 0 then
             local newCreator = admin:exec('SELECT id FROM players LIMIT 1;')
             if #newCreator > 0 then
@@ -117,7 +132,7 @@ Handlers.add(
     "Start-Game",
     function(msg)
         -- Check if sender is creator
-        local creator = admin:select('SELECT id FROM players WHERE is_creator = TRUE;')
+        local creator = admin:select('SELECT id FROM players WHERE is_creator = TRUE;', {})
         if not creator or #creator == 0 or creator[1].id ~= msg.From then
             msg.reply({ Data = "Only creator can start game" })
             return
@@ -130,39 +145,41 @@ Handlers.add(
             return
         end
 
-        -- Assign roles randomly
+        -- Get all players
         local players = admin:exec("SELECT id FROM players")
-        local shuffledRoles = {}
-        
-        -- Initialize shuffledRoles first
-        for i = 1, #players do
-            if i <= #Roles then
-                shuffledRoles[i] = Roles[i]
-            else
-                break
+        local roles = {}
+
+        -- First add all required roles
+        for _, role in ipairs(RequiredRoles) do
+            table.insert(roles, role)
+        end
+
+        -- Fill remaining slots with extra roles
+        local remainingSlots = #players - #roles
+        for i = 1, remainingSlots do
+            if i <= #ExtraRoles then
+                table.insert(roles, ExtraRoles[i])
             end
         end
 
-        -- Then shuffle them
-        for i = #shuffledRoles, 2, -1 do
+        -- Shuffle roles
+        for i = #roles, 2, -1 do
             local j = math.random(i)
-            shuffledRoles[i], shuffledRoles[j] = shuffledRoles[j], shuffledRoles[i]
+            roles[i], roles[j] = roles[j], roles[i]
         end
 
-        -- Update players with roles
+        -- Assign roles to players
         for i = 1, #players do
-            if shuffledRoles[i] then  -- Make sure we have a role to assign
-                admin:apply(
-                    'UPDATE players SET role = ? WHERE id = ?;',
-                    { shuffledRoles[i], players[i].id }
-                )
-                -- Send private message with role
-                ao.send({
-                    Target = players[i].id,
-                    Action = "Role-Assignment",
-                    Data = shuffledRoles[i]
-                })
-            end
+            admin:apply(
+                'UPDATE players SET role = ? WHERE id = ?;',
+                { roles[i], players[i].id }
+            )
+            -- Send private message with role
+            ao.send({
+                Target = players[i].id,
+                Action = "Role-Assignment",
+                Data = roles[i]
+            })
         end
 
         -- Update game state
@@ -199,53 +216,99 @@ Handlers.add(
         end
 
         local voter = msg.From
-        local votee = msg.Data.votedId
+        local votedId = msg.Tags.votedId
 
         -- Check if voter is alive
-        local voterAlive = admin:select('SELECT is_alive FROM players WHERE id = ?;', { voter })
-        if not voterAlive[1].is_alive then
+        local voterAlive = admin:select('SELECT is_alive FROM players WHERE id = ?', { voter })
+        if not voterAlive or not voterAlive[1].is_alive then
             msg.reply({ Data = "Dead players cannot vote" })
             return
         end
 
         -- Record vote
-        admin:apply(
-            'UPDATE players SET votes = votes + 1 WHERE id = ?;',
-            { votee }
-        )
-
+        admin:apply('INSERT OR REPLACE INTO votes (voter, voted_for) VALUES (?, ?)', { voter, votedId })
         msg.reply({ Data = "Vote recorded" })
 
         -- Check if all alive players have voted
-        local alivePlayers = admin:exec("SELECT COUNT(*) as count FROM players WHERE is_alive = TRUE")[1].count
-        local totalVotes = admin:exec("SELECT SUM(votes) as total FROM players")[1].total
+        local alivePlayers = admin:select('SELECT COUNT(*) as count FROM players WHERE is_alive = TRUE')[1].count
+        local votesCast = admin:select('SELECT COUNT(*) as count FROM votes')[1].count
 
-        if totalVotes >= alivePlayers then
-            -- Find player with most votes
-            local mostVoted = admin:exec("SELECT id FROM players ORDER BY votes DESC LIMIT 1")
-            
-            -- Kill player
-            admin:apply(
-                'UPDATE players SET is_alive = FALSE WHERE id = ?;',
-                { mostVoted[1].id }
-            )
-
-            -- Reset votes
-            admin:apply('UPDATE players SET votes = 0;')
-
-            -- Move to night phase
-            GameState.phase = "night"
-            GameState.timestamp = msg.Timestamp
-            
-            -- Check win condition
-            CheckWinCondition()
+        if votesCast >= alivePlayers then
+            -- Resolve votes
+            ResolveDayPhase()
         end
     end
 )
 
+-- Add function to resolve day phase
+function ResolveDayPhase()
+    -- Get vote counts
+    local voteResults = admin:exec([[
+        SELECT voted_for, COUNT(*) as votes
+        FROM votes
+        GROUP BY voted_for
+        ORDER BY votes DESC
+        LIMIT 1
+    ]])
+
+    if #voteResults > 0 then
+        local mostVoted = voteResults[1].voted_for
+        
+        -- Kill the most voted player
+        admin:apply('UPDATE players SET is_alive = FALSE WHERE id = ?', { mostVoted })
+        
+        -- Announce death
+        ao.send({
+            Target = ao.id,
+            Action = "Player-Death",
+            Data = mostVoted
+        })
+
+        -- Clear votes
+        admin:apply('DELETE FROM votes')
+
+        -- Move to night phase
+        GameState.phase = "night"
+        GameState.round = GameState.round + 1
+        
+        admin:apply([[
+            UPDATE game_state 
+            SET phase = ?, round = ?
+            WHERE id = 1
+        ]], { GameState.phase, GameState.round })
+
+        -- Broadcast phase change
+        ao.send({
+            Target = ao.id,
+            Action = "Phase-Change",
+            Data = "night"
+        })
+
+        -- Check win conditions
+        CheckWinConditions()
+    end
+end
+
+-- Initialize night actions tracking
+NightActions = {
+    kills = {},
+    protections = {},
+    revelations = {},
+    actedPlayers = {} -- Track which players have acted
+}
+
+-- Reset night actions function
+function ResetNightActions()
+    NightActions = {
+        kills = {},
+        protections = {},
+        revelations = {},
+        actedPlayers = {}
+    }
+end
+
 -- Night action handler
 Handlers.add(
-    "Night-Action",
     "Night-Action",
     function(msg)
         if GameState.phase ~= "night" then
@@ -254,61 +317,129 @@ Handlers.add(
         end
 
         local actor = msg.From
-        local target = msg.Data.targetId
-        local action = msg.Data.action
+        local target = msg.Tags.Target
+        local action = msg.Tags.ActionType
 
-        -- Get actor's role
-        local actorRole = admin:select('SELECT role FROM players WHERE id = ?;', { actor })[1].role
-
-        if action == "kill" and actorRole == "werewolf" then
-            -- Handle werewolf kill
-            admin:apply(
-                'UPDATE players SET is_alive = FALSE WHERE id = ?;',
-                { target }
-            )
-        elseif action == "protect" and actorRole == "doctor" then
-            -- Handle doctor protection
-            -- Add protection logic
-        elseif action == "see" and actorRole == "seer" then
-            -- Handle seer ability
-            local targetRole = admin:select('SELECT role FROM players WHERE id = ?;', { target })[1].role
-            ao.send({
-                Target = actor,
-                Action = "Seer-Result",
-                Data = targetRole
-            })
+        -- Check if actor has already acted
+        if NightActions.actedPlayers[actor] then
+            msg.reply({ Data = "You have already performed your night action" })
+            return
         end
 
-        -- Move to day phase after all night actions
-        -- This is simplified; you might want to track who has acted
-        GameState.phase = "day"
-        GameState.timestamp = msg.Timestamp
-        GameState.round = GameState.round + 1
+        -- Check if actor is alive
+        local actorData = admin:select('SELECT is_alive, role FROM players WHERE id = ?', { actor })
+        if #actorData == 0 or not actorData[1].is_alive then
+            msg.reply({ Data = "Dead players cannot perform actions" })
+            return
+        end
 
-        CheckWinCondition()
+        -- Handle different actions
+        if action == "kill" and actorData[1].role == "werewolf" then
+            table.insert(NightActions.kills, { target = target, killer = actor })
+            NightActions.actedPlayers[actor] = true
+            msg.reply({ Data = "Kill action recorded" })
+        elseif action == "protect" and actorData[1].role == "doctor" then
+            NightActions.protections[actor] = target
+            NightActions.actedPlayers[actor] = true
+            msg.reply({ Data = "Protection recorded" })
+        elseif action == "see" and actorData[1].role == "seer" then
+            local targetRole = admin:select('SELECT role FROM players WHERE id = ?', { target })[1].role
+            table.insert(NightActions.revelations, {
+                seer = actor,
+                target = target,
+                role = targetRole
+            })
+            NightActions.actedPlayers[actor] = true
+            msg.reply({ Data = targetRole })
+        else
+            msg.reply({ Data = "Invalid action for your role" })
+            return
+        end
+
+        -- Check if all night actions are complete
+        local allActionsComplete = true
+        local alivePlayers = admin:exec([[
+            SELECT id, role 
+            FROM players 
+            WHERE is_alive = TRUE 
+            AND role IN ('werewolf', 'doctor', 'seer')
+        ]])
+
+        for _, player in ipairs(alivePlayers) do
+            if not NightActions.actedPlayers[player.id] then
+                allActionsComplete = false
+                break
+            end
+        end
+
+        if allActionsComplete then
+            -- Move to day phase
+            GameState.phase = "day"
+            GameState.timestamp = os.time()
+            
+            -- Update game state in database
+            admin:apply([[
+                UPDATE game_state 
+                SET phase = 'day', 
+                    timestamp = ? 
+                WHERE id = 1
+            ]], { GameState.timestamp })
+
+            -- Reset acted players for next night
+            NightActions.actedPlayers = {}
+
+            -- Broadcast phase change
+            ao.send({
+                Target = ao.id,
+                Action = "Phase-Change",
+                Data = "day"
+            })
+        end
     end
 )
 
--- Helper function to check win condition
-function CheckWinCondition()
-    local werewolves = admin:exec("SELECT COUNT(*) as count FROM players WHERE role = 'werewolf' AND is_alive = TRUE")[1].count
-    local villagers = admin:exec("SELECT COUNT(*) as count FROM players WHERE role != 'werewolf' AND is_alive = TRUE")[1].count
+-- Function to resolve night actions
+function ResolveNightActions()
+    -- Process kills and protections
+    for _, kill in ipairs(NightActions.kills) do
+        local targetProtected = false
+        
+        -- Check if target was protected
+        for _, protectedId in pairs(NightActions.protections) do
+            if protectedId == kill.target then
+                targetProtected = true
+                break
+            end
+        end
 
-    if werewolves == 0 then
-        GameState.phase = "finished"
-        ao.send({ Target = ao.id, Action = "Game-Over", Data = "Villagers win!" })
-    elseif werewolves >= villagers then
-        GameState.phase = "finished"
-        ao.send({ Target = ao.id, Action = "Game-Over", Data = "Werewolves win!" })
+        -- Kill unprotected targets
+        if not targetProtected then
+            admin:apply(
+                'UPDATE players SET is_alive = FALSE WHERE id = ?',
+                { kill.target }
+            )
+            
+            -- Announce death
+            ao.send({
+                Target = ao.id,
+                Action = "Player-Death",
+                Data = kill.target
+            })
+        end
     end
+
+    -- Reset night actions
+    ResetNightActions()
+
+    -- Check win conditions
+    CheckWinConditions()
 end
 
--- Get player role
+-- Get role handler
 Handlers.add(
     "Get-Role",
-    "Get-Role",
     function(msg)
-        local player = admin:select('SELECT role FROM players WHERE id = ?;', { msg.From })
+        local player = admin:select('SELECT role FROM players WHERE id = ?', { msg.From })
         if #player == 0 then
             msg.reply({ Data = "Not in game" })
             return
@@ -333,7 +464,7 @@ Handlers.add(
     "Reset-Game",
     function(msg)
         -- Check if sender is creator
-        local creator = admin:select('SELECT id FROM players WHERE is_creator = TRUE;')
+        local creator = admin:select('SELECT id FROM players WHERE is_creator = TRUE;', {})
         if #creator == 0 or creator[1].id ~= msg.From then
             msg.reply({ Data = "Only creator can reset game" })
             return
@@ -370,3 +501,67 @@ Handlers.add(
         msg.reply({ Data = player[1].is_alive })
     end
 )
+
+-- Get seer visions handler
+Handlers.add(
+    "Get-Visions",
+    function(msg)
+        -- Verify seer
+        local player = admin:select('SELECT role FROM players WHERE id = ?', { msg.From })
+        if #player == 0 or player[1].role ~= "seer" then
+            msg.reply({ Data = "Not authorized" })
+            return
+        end
+
+        -- Get seer's visions
+        local seerVisions = {}
+        for _, vision in ipairs(NightActions.revelations) do
+            if vision.seer == msg.From then
+                table.insert(seerVisions, {
+                    target = vision.target,
+                    role = vision.role
+                })
+            end
+        end
+        msg.reply({ Data = seerVisions })
+    end
+)
+
+-- Function to check win conditions
+function CheckWinConditions()
+    local alivePlayers = admin:exec([[
+        SELECT role, COUNT(*) as count 
+        FROM players 
+        WHERE is_alive = TRUE 
+        GROUP BY role
+    ]])
+
+    local werewolfCount = 0
+    local villagerCount = 0
+
+    for _, roleCount in ipairs(alivePlayers) do
+        if roleCount.role == "werewolf" then
+            werewolfCount = roleCount.count
+        else
+            villagerCount = villagerCount + roleCount.count
+        end
+    end
+
+    -- Check win conditions
+    if werewolfCount == 0 then
+        -- Villagers win
+        ao.send({
+            Target = ao.id,
+            Action = "Game-Over",
+            Data = "villagers"
+        })
+    elseif werewolfCount >= villagerCount then
+        -- Werewolves win
+        ao.send({
+            Target = ao.id,
+            Action = "Game-Over",
+            Data = "werewolves"
+        })
+    end
+end
+
