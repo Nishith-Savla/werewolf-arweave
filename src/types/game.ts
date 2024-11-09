@@ -1,16 +1,19 @@
-export interface GameState {
-  phase: "lobby" | "day" | "night";
-  players: Player[];
-  votes: Record<string, string>;
-  dayCount: number;
-  gameStarted: boolean;
-}
+export type GamePhase = 'lobby' | 'day' | 'night';
+export type PlayerRole = 'werewolf' | 'villager' | 'seer' | 'doctor';
 
 export interface Player {
   id: string;
   name: string;
+  role?: PlayerRole;
   isAlive: boolean;
-  role?: string;
+  isCreator: boolean;
+}
+
+export interface GameState {
+  gameProcess: string;
+  phase: GamePhase;
+  currentRound: number;
+  currentTimestamp: number;
 }
 
 export interface GameAction {

@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { GameState } from "@/types/game";
+import { GameState, Player } from "@/types/game";
 import { useCallback, useEffect, useState } from "react";
 import { useGameContext } from "../context/GameContext";
 import { dryrunResult, messageResult } from "../lib/utils";
@@ -54,36 +54,44 @@ export const WaitingRoom = () => {
 						value: "Get-Players",
 					},
 				]);
+
+				console.log("Raw players result:", result);
+
 				if (result && Array.isArray(result)) {
 					const validPlayers = result
-						.filter((player): player is PlayerResponse => !!player)
+						.filter((player) => !!player)
 						.map((player) => ({
 							id: player.id || player.address || "",
 							name: player.name || player.displayName || "",
-							isCreator: Boolean(player.isCreator),
+							isCreator: Boolean(player.is_creator),
 							isAlive: true,
 						}))
 						.filter((player) => player.id && player.name);
+
+					console.log("Mapped players:", validPlayers);
+
+					// Update current player's creator status if needed
 					if (currentPlayer) {
 						const playerData = validPlayers.find((p) => p.id === currentPlayer.id);
-						if (playerData?.isCreator) {
-							setCurrentPlayer({
-								...currentPlayer,
-								isCreator: true,
-							});
+						console.log("Found player data:", playerData);
+						
+						if (playerData?.isCreator !== currentPlayer.isCreator) {
+							setCurrentPlayer((prev) => ({
+								...prev!,
+								isCreator: playerData?.isCreator || false,
+							}));
 						}
 					}
-					if (JSON.stringify(validPlayers) !== JSON.stringify(joinedPlayers)) {
-						setIsLoading(true);
-						setJoinedPlayers(validPlayers);
-						setIsLoading(false);
-					}
+
+					setJoinedPlayers(validPlayers);
 				}
 			}
+			setIsLoading(false);
 		} catch (error) {
-			console.error("Error fetching players:", error);
+			console.error("Error in fetchPlayers:", error);
+			setIsLoading(false);
 		}
-	}, [gameState.gameProcess, currentPlayer, setCurrentPlayer, joinedPlayers]);
+	}, [gameState.gameProcess, currentPlayer, setCurrentPlayer, setGamestate, setMode]);
 
 	useEffect(() => {
 		if (!gameState.gameProcess) return;
@@ -260,27 +268,23 @@ export const WaitingRoom = () => {
 			</div>
 
 			<div className="actions flex gap-4 justify-center mt-8">
-				{currentPlayer?.isCreator && (
-					<Button
-						onClick={handleStartGame}
-						disabled={joinedPlayers.length < 4}
-						className="px-8"
-						variant="default"
-						size="lg"
-					>
-						Start Game {joinedPlayers.length < 4 && `(Need ${4 - joinedPlayers.length} more)`}
-					</Button>
-				)}
+				<Button
+					onClick={handleStartGame}
+					disabled={joinedPlayers.length < 4 || !currentPlayer?.isCreator}
+					className="px-8"
+					variant="default"
+					size="lg"
+				>
+					{currentPlayer?.isCreator
+						? `Start Game ${
+								joinedPlayers.length < 4 ? `(Need ${4 - joinedPlayers.length} more)` : ""
+						  }`
+						: "Waiting for creator to start..."}
+				</Button>
 				<Button onClick={handleLeaveRoom} variant="outline" size="lg" className="px-8">
 					Leave Room
 				</Button>
 			</div>
-
-			{!currentPlayer?.isCreator && (
-				<p className="text-center mt-4 text-muted-foreground">
-					Waiting for the creator to start the game...
-				</p>
-			)}
 		</div>
 	);
 };

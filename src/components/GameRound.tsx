@@ -2,11 +2,19 @@ import { useEffect, useState } from "react";
 import type { GameMode } from "../context/GameContext";
 import { useGameContext } from "../context/GameContext";
 import { dryrunResult, messageResult } from "../lib/utils";
+import { GameNotifications } from "./GameNotifications";
 import "./GameRound.css";
 
 interface DebugInfo {
 	gameState: any;
 	roleResult: any;
+	userDetails: {
+		id: string | null;
+		name: string | null;
+		isCreator: boolean;
+		role?: string | null;
+		error?: string;
+	};
 }
 
 interface Player {
@@ -22,20 +30,6 @@ interface GameEvent {
 const subscribeToGameEvents = (handler: (event: GameEvent) => void, gameState: any) => {
 	const intervalId = setInterval(async () => {
 		try {
-			const gameStateResult = await dryrunResult(gameState.gameProcess, [
-				{
-					name: "Action",
-					value: "Get-Game-State",
-				},
-			]);
-
-			if (gameStateResult?.phase !== gameState.phase) {
-				handler({
-					Action: "Phase-Change",
-					Data: gameStateResult.phase
-				});
-			}
-
 			const result = await dryrunResult(gameState.gameProcess, [
 				{
 					name: "Action",
@@ -43,11 +37,13 @@ const subscribeToGameEvents = (handler: (event: GameEvent) => void, gameState: a
 				},
 			]);
 
-			if (Array.isArray(result)) {
-				result.forEach((event) => handler(event));
+			if (result) {
+				if (Array.isArray(result)) {
+					result.forEach((event) => handler(event));
+				}
 			}
 		} catch (error) {
-			console.error("Error fetching game events:", error);
+			console.error("Error in game events subscription:", error);
 		}
 	}, 5000);
 
@@ -59,7 +55,7 @@ export const GameRound = () => {
 	const [role, setRole] = useState<string | null>(null);
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
-	const [debugInfo, setDebugInfo] = useState({});
+	const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null);
 	const [alivePlayers, setAlivePlayers] = useState<Player[]>([]);
 	const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
 	const [visions, setVisions] = useState<Array<{ target: string; role: string }>>([]);
@@ -91,6 +87,16 @@ export const GameRound = () => {
 			if (!currentPlayer?.id) {
 				console.error("No current player ID");
 				setError("No player ID found");
+				setDebugInfo({
+					gameState: null,
+					roleResult: null,
+					userDetails: {
+						id: currentPlayer?.id || null,
+						name: currentPlayer?.name || null,
+						isCreator: currentPlayer?.isCreator || false,
+						error: "No player ID found",
+					},
+				});
 				setIsLoading(false);
 				return;
 			}
@@ -108,10 +114,6 @@ export const GameRound = () => {
 
 				console.log("Current game state:", gameStateResult);
 
-				if (gameStateResult?.phase !== "night") {
-					throw new Error(`Invalid game phase: ${gameStateResult?.phase}`);
-				}
-
 				const { Messages } = await messageResult(gameState.gameProcess, [
 					{
 						name: "Action",
@@ -119,12 +121,41 @@ export const GameRound = () => {
 					},
 				]);
 
+				setDebugInfo({
+					gameState: gameStateResult,
+					roleResult: Messages?.[0]?.Data || null,
+					userDetails: {
+						id: currentPlayer.id,
+						name: currentPlayer.name,
+						isCreator: currentPlayer.isCreator || false,
+						role: Messages?.[0]?.Data || null,
+					},
+				});
+
 				if (Messages?.[0]?.Data) {
 					setRole(Messages[0].Data);
+				} else {
+					console.error("No role data received");
+					setError("Could not fetch role");
 				}
-			} catch (error) {
+			} catch (error: any) {
 				console.error("Error in fetchRole:", error);
 				setError(error.message);
+				setDebugInfo({
+					gameState: await dryrunResult(gameState.gameProcess, [
+						{
+							name: "Action",
+							value: "Get-Game-State",
+						},
+					]).catch(() => null),
+					roleResult: null,
+					userDetails: {
+						id: currentPlayer.id,
+						name: currentPlayer.name,
+						isCreator: currentPlayer.isCreator || false,
+						error: error.message,
+					},
+				});
 			} finally {
 				setIsLoading(false);
 			}
@@ -158,17 +189,50 @@ export const GameRound = () => {
 
 	// Subscribe to game events
 	useEffect(() => {
-		const handleGameEvents = (event: GameEvent) => {
-			if (event.Action === "Phase-Change") {
-				setMode(event.Data as GameMode);
-				setGamestate((prevState: GameState) => ({
-					...prevState,
-					phase: event.Data,
-				}));
-			} else if (event.Action === "Player-Death") {
-				setActionResult(`Player ${event.Data} has died!`);
-			} else if (event.Action === "Seer-Result") {
-				setActionResult(`The player's role is: ${event.Data}`);
+		const handleGameEvents = async () => {
+			try {
+				const result = await dryrunResult(gameState.gameProcess, [
+					{
+						name: "Action",
+						value: "Get-Game-Events",
+					},
+				]);
+
+				if (!result) {
+					console.log("No game events available");
+					return;
+				}
+
+				// Handle phase changes from game state
+				const gameStateResult = await dryrunResult(gameState.gameProcess, [
+					{
+						name: "Action",
+						value: "Get-Game-State",
+					},
+				]);
+
+				if (gameStateResult?.phase !== gameState.phase) {
+					setGamestate((prev) => ({
+						...prev,
+						phase: gameStateResult.phase,
+					}));
+					setMode(gameStateResult.phase as GameMode);
+				}
+
+				// Handle other game events if they exist
+				if (Array.isArray(result)) {
+					result.forEach((event) => {
+						if (event.Action === "Phase-Change") {
+							setGamestate((prev) => ({
+								...prev,
+								phase: event.Data,
+							}));
+							setMode(event.Data as GameMode);
+						}
+					});
+				}
+			} catch (error) {
+				console.error("Error fetching game events:", error);
 			}
 		};
 
@@ -183,26 +247,39 @@ export const GameRound = () => {
 		}
 
 		try {
-			const { Messages } = await messageResult(
-				gameState.gameProcess,
-				[
-					{
-						name: "Action",
-						value: "Night-Action",
-					},
-					{
-						name: "Target",
-						value: selectedPlayer,
-					},
-					{
-						name: "ActionType",
-						value: action,
-					},
-				]
-			);
+			const { Messages } = await messageResult(gameState.gameProcess, [
+				{
+					name: "Action",
+					value: "Night-Action",
+				},
+				{
+					name: "Target",
+					value: selectedPlayer,
+				},
+				{
+					name: "ActionType",
+					value: action,
+				},
+			]);
 
 			if (Messages?.[0]?.Data) {
-				alert(Messages[0].Data);
+				if (role === "seer") {
+					// For seer, directly use the response as the role
+					setActionResult(Messages[1].Data);
+
+					// Refresh visions list
+					const visionsResult = await dryrunResult(gameState.gameProcess, [
+						{
+							name: "Action",
+							value: "Get-Visions",
+						},
+					]);
+					if (Array.isArray(visionsResult)) {
+						setVisions(visionsResult);
+					}
+				} else {
+					alert(Messages[0].Data);
+				}
 				setSelectedPlayer(null);
 			}
 		} catch (error) {
@@ -217,19 +294,16 @@ export const GameRound = () => {
 		}
 
 		try {
-			const { Messages } = await messageResult(
-				gameState.gameProcess,
-				[
-					{
-						name: "Action",
-						value: "Vote",
-					},
-					{
-						name: "votedId",
-						value: selectedPlayer,
-					},
-				]
-			);
+			const { Messages } = await messageResult(gameState.gameProcess, [
+				{
+					name: "Action",
+					value: "Vote",
+				},
+				{
+					name: "votedId",
+					value: selectedPlayer,
+				},
+			]);
 
 			if (Messages?.[0]?.Data) {
 				alert(Messages[0].Data);
@@ -241,13 +315,15 @@ export const GameRound = () => {
 	};
 
 	const renderGameActions = () => {
-		if (mode === "night" && role) {
+		if (gameState.phase === "night" && role) {
 			return (
 				<div className="night-actions">
 					<h3 className="text-xl font-semibold mb-4">Night Actions</h3>
 
 					{actionResult && (
-						<div className="action-result mb-4 p-2 bg-blue-100 rounded">{actionResult}</div>
+						<div className="action-result mb-4 p-2 bg-blue-100 rounded">
+							{role === "seer" ? `Player's role: ${actionResult}` : actionResult}
+						</div>
 					)}
 
 					{role === "seer" && visions.length > 0 && (
@@ -312,7 +388,7 @@ export const GameRound = () => {
 					</div>
 				</div>
 			);
-		} else if (mode === "day") {
+		} else if (gameState.phase === "day") {
 			return (
 				<div className="day-actions">
 					<h3 className="text-xl font-semibold mb-4">Day Actions</h3>
@@ -370,19 +446,22 @@ export const GameRound = () => {
 
 	return (
 		<div className="game-round p-6">
+			<GameNotifications />
 			<div className="game-info mb-6">
 				<h2 className="text-2xl font-bold mb-2">Game Round</h2>
 				<p className="text-lg">Phase: {mode.charAt(0).toUpperCase() + mode.slice(1)}</p>
-				<p className="text-lg">Your Role: {role || "Unknown"}</p>
+				<p className="text-lg">Your Role: {role || "Loading..."}</p>
 				<p className="text-lg">Game Phase: {gameState?.phase || "Unknown"}</p>
 			</div>
 
 			<div className="game-actions mb-6">{renderGameActions()}</div>
 
-			<div className="mt-8 p-4 bg-gray-100 rounded">
-				<h3 className="text-lg font-semibold mb-2">Debug Information</h3>
-				<pre className="text-sm">{JSON.stringify(debugInfo, null, 2)}</pre>
-			</div>
+			{process.env.NODE_ENV === "development" && (
+				<div className="mt-8 p-4 bg-gray-100 rounded">
+					<h3 className="text-lg font-semibold mb-2">Debug Information</h3>
+					<pre className="text-sm">{JSON.stringify(debugInfo, null, 2)}</pre>
+				</div>
+			)}
 		</div>
 	);
 };

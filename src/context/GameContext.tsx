@@ -25,7 +25,7 @@ interface GameContextType {
 	joinedPlayers: Player[];
 	setJoinedPlayers: (players: Player[]) => void;
 	gameState: GameState;
-	setGamestate: (gamestate: GameState) => void;
+	setGamestate: (gamestate: GameState | ((prevState: GameState) => GameState)) => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);

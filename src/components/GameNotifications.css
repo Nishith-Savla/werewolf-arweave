@@ -1,0 +1,51 @@
+.game-notifications {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.notification {
+  padding: 12px 20px;
+  border-radius: 8px;
+  color: white;
+  animation: slideIn 0.3s ease-out;
+}
+
+.notification.elimination {
+  background-color: #ef4444;
+}
+
+.notification.phase-change {
+  background-color: #3b82f6;
+}
+
+.notification.game-over {
+  background-color: #8b5cf6;
+}
+
+.notification.vote {
+  background-color: #10b981;
+}
+
+.notification.debug {
+  background-color: #6b7280;
+}
+
+.notification.night-action {
+  background-color: #6366f1;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+} 

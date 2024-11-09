@@ -28,7 +28,6 @@ export const LandingPage = () => {
 		};
 
 		try {
-			// Use Get-Players handler instead and filter for the current player
 			const playersRes = await dryrunResult(
 				gameState.gameProcess,
 				[
@@ -40,8 +39,11 @@ export const LandingPage = () => {
 				{ address: activeAddress }
 			);
 
+			console.log("Raw players response:", playersRes);
+
 			// Find the current player in the players list
-			const currentPlayerData = playersRes?.find((player: Player) => player.id === activeAddress);
+			const currentPlayerData = playersRes?.find((player: any) => player.id === activeAddress);
+			console.log("Found player data:", currentPlayerData);
 
 			if (currentPlayerData) {
 				console.log("Found existing profile:", currentPlayerData);
