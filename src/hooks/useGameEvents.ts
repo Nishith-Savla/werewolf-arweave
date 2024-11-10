@@ -137,7 +137,7 @@ export const useGameEvents = () => {
 			}
 		};
 
-		const intervalId = setInterval(pollEvents, 5000);
+		const intervalId = setInterval(pollEvents, 10000);
 		pollEvents(); // Initial poll
 
 		return () => {

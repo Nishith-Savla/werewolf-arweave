@@ -57,7 +57,7 @@ const subscribeToGameEvents = (handler: (event: GameEvent) => void, gameState: a
 		} catch (error) {
 			console.error("Error in game events subscription:", error);
 		}
-	}, 5000);
+	}, 10000);
 
 	return () => clearInterval(intervalId);
 };

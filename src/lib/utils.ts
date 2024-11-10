@@ -31,7 +31,7 @@ export async function dryrunResult(
 			data: data ? JSON.stringify(data) : undefined,
 		});
 
-		console.log("Raw dryrun response:", res);
+		// console.log("Raw dryrun response:", res);
 
 		if (!res.Messages?.[0]?.Data) {
 			console.warn("No data in dryrun response:", res);
@@ -43,7 +43,7 @@ export async function dryrunResult(
 			console.log("Dryrun result:", parsedData);
 			return parsedData;
 		} catch (e) {
-			console.log("Raw dryrun result:", res.Messages[0].Data);
+			// console.log("Raw dryrun result:", res.Messages[0].Data);
 			return res.Messages[0].Data;
 		}
 	} catch (error: any) {
@@ -87,7 +87,12 @@ export async function messageResult(
 		console.log("Message sent:", messageRes);
 
 		// Wait for result
-		const { Messages, Spawns, Output, Error: error } = await result({
+		const {
+			Messages,
+			Spawns,
+			Output,
+			Error: error,
+		} = await result({
 			message: messageRes,
 			process: gameProcess,
 		});

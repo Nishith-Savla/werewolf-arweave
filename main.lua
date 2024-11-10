@@ -420,11 +420,7 @@ function ResolveDayPhase()
     -- Announce phase change
     BroadcastGameEvent({
         Action = "Phase-Change",
-        Data = {
-            phase = "night",
-            round = GameState.round,
-            message = "Night falls on the village..."
-        }
+        Data = "night"
     })
 
     -- Check win conditions
@@ -550,17 +546,6 @@ function TransitionToDay()
         Action = "Phase-Change",
         Data = "day"
     })
-
-    -- Send a more detailed notification
-    ao.send({
-        Target = ao.id,
-        Action = "Phase-Change",
-        Data = {
-            phase = "day",
-            round = GameState.round,
-            message = "Night has ended. The village awakens to vote..."
-        }
-    })
 end
 
 -- Add a handler to check game phase
@@ -574,52 +559,6 @@ Handlers.add(
                 nightActions = GameState.nightActionsComplete
             }
         })
-    end
-)
-
--- Add function to force phase change (for debugging)
-Handlers.add(
-    "Force-Day-Phase",
-    function(msg)
-        -- Check if sender is creator
-        local creator = admin:select('SELECT id FROM players WHERE is_creator = TRUE;', {})
-        if #creator == 0 or creator[1].id ~= msg.From then
-            msg.reply({ Data = "Only creator can force phase change" })
-            return
-        end
-
-        GameState.phase = "day"
-        GameState.timestamp = os.time()
-        
-        -- Reset night actions
-        GameState.nightActionsComplete = {
-            werewolf = false,
-            doctor = false,
-            seer = false
-        }
-        
-        -- Update database
-        admin:apply([[
-            UPDATE game_state 
-            SET phase = ?, timestamp = ?
-            WHERE id = 1
-        ]], { "day", GameState.timestamp })
-
-        -- Clear votes
-        admin:exec('DELETE FROM votes')
-
-        -- Broadcast phase change
-        ao.send({
-            Target = ao.id,
-            Action = "Phase-Change",
-            Data = {
-                phase = "day",
-                round = GameState.round,
-                message = "Phase forcefully changed to day"
-            }
-        })
-
-        msg.reply({ Data = "Phase changed to day" })
     end
 )
 
