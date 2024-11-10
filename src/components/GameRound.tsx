@@ -245,16 +245,11 @@ export const GameRound = () => {
 					},
 				]);
 
-				console.log("Check-Alive response:", Messages);
-
 				// Handle the response more carefully
-				if (Messages && Messages[0]) {
+				if (Messages?.[0]) {
 					const isAliveResponse = Messages[0].Data;
 					console.log("Is alive response:", isAliveResponse);
 					setIsAlive(isAliveResponse === true || isAliveResponse === 1);
-				} else {
-					console.warn("No response from Check-Alive");
-					setIsAlive(false); // Assume dead if no response
 				}
 			} catch (error) {
 				console.error("Error checking alive status:", error);
@@ -460,7 +455,7 @@ export const GameRound = () => {
 				</div>
 			);
 		} else if (gameState.phase === "day") {
-			if (!isAlive) {
+			if (isAlive === false) {
 				return (
 					<div className="day-actions">
 						<h3 className="text-xl font-semibold mb-4">Day Phase</h3>
@@ -543,7 +538,7 @@ export const GameRound = () => {
 			<div className="game-actions mb-6">{renderGameActions()}</div>
 
 			{process.env.NODE_ENV === "development" && (
-				<div className="mt-8 p-4 bg-gray-100 rounded">
+				<div className="mt-8 p-4 bg-gray-100 rounded debug-info">
 					<h3 className="text-lg font-semibold mb-2">Debug Information</h3>
 					<pre className="text-sm">{JSON.stringify(debugInfo, null, 2)}</pre>
 				</div>
