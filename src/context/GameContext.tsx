@@ -16,6 +16,7 @@ export interface Player {
 	id: string;
 	name: string;
 	role?: PlayerRole;
+	bazarId?: string;
 	isAlive: boolean;
 	isCreator: boolean;
 }

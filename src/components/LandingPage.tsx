@@ -1,9 +1,9 @@
+import { UIState } from "@/types/game";
 import { ConnectButton, useActiveAddress, useConnection } from "arweave-wallet-kit";
 import { useEffect } from "react";
 import { useGameContext } from "../context/GameContext";
 import { dryrunResult, formatAddress, messageResult } from "../lib/utils";
 import "./LandingPage.css";
-import { UIState } from "@/types/game";
 
 export const LandingPage = () => {
 	const { currentPlayer, setCurrentPlayer, gameState } = useGameContext();
@@ -21,13 +21,40 @@ export const LandingPage = () => {
 		// Create a default player profile
 		const defaultProfile = {
 			id: activeAddress,
-			name: `Wolf_${formatAddress(activeAddress)}`,
+			name: formatAddress(activeAddress),
 			isAlive: true,
 			role: undefined,
 			isCreator: false,
 		};
 
 		try {
+			// First try to fetch Bazar profile
+			const profileIdRes = await dryrunResult(
+				"SNy4m-DrqxWl01YqGM4sxI8qCni-58re8uuJLvZPypY",
+				[
+					{
+						name: "Action",
+						value: "Get-Profiles-By-Delegate",
+					},
+				],
+				{ Address: activeAddress }
+			);
+
+			let bazarName = null;
+			if (profileIdRes && profileIdRes[0]?.ProfileId) {
+				const profileRes = await dryrunResult(profileIdRes[0].ProfileId, [
+					{
+						name: "Action",
+						value: "Info",
+					},
+				]);
+
+				if (profileRes?.Profile?.DisplayName) {
+					bazarName = profileRes.Profile.DisplayName;
+				}
+			}
+
+			// Now fetch game player data
 			const playersRes = await dryrunResult(
 				gameState.gameProcess,
 				[
@@ -49,14 +76,19 @@ export const LandingPage = () => {
 				console.log("Found existing profile:", currentPlayerData);
 				setCurrentPlayer({
 					...defaultProfile,
-					name: currentPlayerData.name,
+					name: bazarName || currentPlayerData.name,
+					bazarId: profileIdRes?.[0]?.ProfileId,
 					isCreator: Boolean(currentPlayerData.is_creator),
 					isAlive: Boolean(currentPlayerData.is_alive),
 					role: currentPlayerData.role,
 				});
 			} else {
-				console.log("No existing profile found, using default");
-				setCurrentPlayer(defaultProfile);
+				console.log("No existing profile found, using default with Bazar name");
+				setCurrentPlayer({
+					...defaultProfile,
+					name: bazarName || defaultProfile.name,
+					bazarId: profileIdRes?.[0]?.ProfileId,
+				});
 			}
 		} catch (error) {
 			console.log("Error fetching profile, using default:", error);
