@@ -30,15 +30,18 @@ export const WaitingRoom = () => {
 				},
 			]);
 			console.log("Game state result:", gameStateResult);
-			if (gameStateResult?.phase === GamePhase.Night) {
+			
+			// Check for both Night and Day phases
+			if (gameStateResult?.phase === GamePhase.Night || gameStateResult?.phase === GamePhase.Day) {
 				setGamestate((prevState: GameState) => ({
 					...prevState,
-					phase: GamePhase.Night,
+					phase: gameStateResult.phase,
 				}));
-				setMode(phaseToUIState(GamePhase.Night));
+				setMode(phaseToUIState(gameStateResult.phase));
 				setIsLoading(false);
 				return;
 			}
+
 			if (gameStateResult?.phase === GamePhase.Lobby) {
 				const result = await dryrunResult(gameState.gameProcess, [
 					{
@@ -151,12 +154,13 @@ export const WaitingRoom = () => {
 						},
 					]);
 
-					if (gameStateResult?.phase === GamePhase.Night) {
+					// Check for both Night and Day phases
+					if (gameStateResult?.phase === GamePhase.Night || gameStateResult?.phase === GamePhase.Day) {
 						setGamestate((prev) => ({
 							...prev,
-							phase: GamePhase.Night,
+							phase: gameStateResult.phase,
 						}));
-						setMode(phaseToUIState(GamePhase.Night));
+						setMode(phaseToUIState(gameStateResult.phase));
 					}
 				} catch (error) {
 					console.error("Error checking game state:", error);
