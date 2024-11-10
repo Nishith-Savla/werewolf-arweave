@@ -400,7 +400,12 @@ function ResolveDayPhase()
     -- Clear votes
     admin:exec('DELETE FROM votes;')
 
-    -- Move to night phase
+    -- Check win conditions before transitioning to night phase
+    if CheckWinConditions() then
+        return  -- Don't transition to night phase if game is over
+    end
+
+    -- Only transition to night phase if game isn't over
     GameState.phase = "night"
     GameState.round = GameState.round + 1
     
@@ -422,11 +427,6 @@ function ResolveDayPhase()
         Action = "Phase-Change",
         Data = "night"
     })
-
-    -- Check win conditions
-    if #tiedPlayers == 1 then
-        CheckWinConditions()
-    end
 end
 
 -- Initialize night actions tracking
@@ -502,11 +502,35 @@ Handlers.add(
 
         -- If action was recorded, check for phase transition
         if actionRecorded then
-            -- Check if all required night actions are complete
-            if GameState.nightActionsComplete.werewolf and 
-               GameState.nightActionsComplete.doctor and 
-               GameState.nightActionsComplete.seer then
-                
+            -- Get count of alive players for each required role in one query
+            local aliveRoles = admin:exec([[
+                SELECT role, COUNT(*) as count 
+                FROM players 
+                WHERE role IN ('werewolf', 'doctor', 'seer') 
+                AND is_alive = TRUE 
+                GROUP BY role
+            ]])
+
+            -- Create lookup table of alive role counts
+            local aliveCounts = {}
+            for _, row in ipairs(aliveRoles) do
+                aliveCounts[row.role] = row.count > 0
+            end
+
+            -- Check if all required night actions are complete for alive players
+            local shouldTransition = true
+            
+            if aliveCounts.werewolf and not GameState.nightActionsComplete.werewolf then
+                shouldTransition = false
+            end
+            if aliveCounts.doctor and not GameState.nightActionsComplete.doctor then
+                shouldTransition = false
+            end
+            if aliveCounts.seer and not GameState.nightActionsComplete.seer then
+                shouldTransition = false
+            end
+
+            if shouldTransition then
                 -- Process night actions and transition to day phase
                 TransitionToDay()
             end
@@ -516,10 +540,20 @@ Handlers.add(
 
 -- Add new function to handle transition to day phase
 function TransitionToDay()
+    -- Check win conditions before transitioning to day phase
+    if CheckWinConditions() then
+        return  -- Don't transition to day phase if game is over
+    end
+
     -- Process night actions first
     ResolveNightActions()
 
-    -- Move to day phase
+    -- Check win conditions again after night actions
+    if CheckWinConditions() then
+        return
+    end
+
+    -- Only transition to day phase if game isn't over
     GameState.phase = "day"
     GameState.timestamp = os.time()
     
@@ -540,9 +574,8 @@ function TransitionToDay()
     -- Clear votes table for new day
     admin:exec('DELETE FROM votes')
 
-    -- Broadcast phase change - Send two notifications to ensure delivery
-    ao.send({
-        Target = ao.id,
+    -- Broadcast phase change
+    BroadcastGameEvent({
         Action = "Phase-Change",
         Data = "day"
     })
@@ -736,7 +769,7 @@ function CheckWinConditions()
     ]])
 
     local werewolfCount = 0
-    local villagerCount = 0
+    local villagerCount = 0  -- This will include all non-werewolf roles
 
     for _, roleCount in ipairs(alivePlayers) do
         if roleCount.role == "werewolf" then
@@ -746,22 +779,48 @@ function CheckWinConditions()
         end
     end
 
+    -- Debug logging
+    admin:apply([[
+        INSERT INTO game_events (action, data)
+        VALUES (?, ?);
+    ]], {
+        "Debug-Win-Check",
+        json.encode({
+            werewolfCount = werewolfCount,
+            villagerCount = villagerCount
+        })
+    })
+
     -- Check win conditions
     if werewolfCount == 0 then
         -- Villagers win
-        ao.send({
-            Target = ao.id,
+        BroadcastGameEvent({
             Action = "Game-Over",
             Data = "villagers"
         })
+        -- Set game phase to "ended"
+        GameState.phase = "ended"
+        admin:apply(
+            'UPDATE game_state SET phase = ? WHERE id = 1;',
+            { "ended" }
+        )
+        return true
     elseif werewolfCount >= villagerCount then
         -- Werewolves win
-        ao.send({
-            Target = ao.id,
+        BroadcastGameEvent({
             Action = "Game-Over",
             Data = "werewolves"
         })
+        -- Set game phase to "ended"
+        GameState.phase = "ended"
+        admin:apply(
+            'UPDATE game_state SET phase = ? WHERE id = 1;',
+            { "ended" }
+        )
+        return true
     end
+
+    return false
 end
 
 -- Function to update night action status in database

@@ -288,11 +288,7 @@ export const GameRound = () => {
 
 			if (Messages?.length > 0) {
 				if (role === "seer") {
-					// For seer, we need both messages:
-					// Messages[0] is the action confirmation
-					// Messages[1] contains the revealed role
-					alert(Messages[0].Data); // Show action confirmation
-					setActionResult(Messages[1].Data); // Set the revealed role
+					setActionResult(Messages[0].Data); // Set the revealed role
 
 					// Refresh visions list
 					const visionsResult = await dryrunResult(gameState.gameProcess, [

@@ -1,4 +1,4 @@
-export type GamePhase = 'lobby' | 'day' | 'night';
+export type GamePhase = 'lobby' | 'day' | 'night' | 'ended';
 export type PlayerRole = 'werewolf' | 'villager' | 'seer' | 'doctor';
 
 export interface Player {
