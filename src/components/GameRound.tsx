@@ -30,6 +30,20 @@ interface GameEvent {
 const subscribeToGameEvents = (handler: (event: GameEvent) => void, gameState: any) => {
 	const intervalId = setInterval(async () => {
 		try {
+			const gameStateResult = await dryrunResult(gameState.gameProcess, [
+				{
+					name: "Action",
+					value: "Get-Game-State",
+				},
+			]);
+
+			if (gameStateResult && gameStateResult.phase !== gameState.phase) {
+				handler({
+					Action: "Phase-Change",
+					Data: gameStateResult.phase,
+				});
+			}
+
 			const result = await dryrunResult(gameState.gameProcess, [
 				{
 					name: "Action",
@@ -37,10 +51,8 @@ const subscribeToGameEvents = (handler: (event: GameEvent) => void, gameState: a
 				},
 			]);
 
-			if (result) {
-				if (Array.isArray(result)) {
-					result.forEach((event) => handler(event));
-				}
+			if (result && Array.isArray(result)) {
+				result.forEach((event) => handler(event));
 			}
 		} catch (error) {
 			console.error("Error in game events subscription:", error);
@@ -189,56 +201,36 @@ export const GameRound = () => {
 
 	// Subscribe to game events
 	useEffect(() => {
-		const handleGameEvents = async () => {
+		const handleGameEvent = async (event: GameEvent) => {
 			try {
-				const result = await dryrunResult(gameState.gameProcess, [
-					{
-						name: "Action",
-						value: "Get-Game-Events",
-					},
-				]);
-
-				if (!result) {
-					console.log("No game events available");
-					return;
-				}
-
-				// Handle phase changes from game state
-				const gameStateResult = await dryrunResult(gameState.gameProcess, [
-					{
-						name: "Action",
-						value: "Get-Game-State",
-					},
-				]);
-
-				if (gameStateResult?.phase !== gameState.phase) {
+				if (event.Action === "Phase-Change") {
 					setGamestate((prev) => ({
 						...prev,
-						phase: gameStateResult.phase,
+						phase: event.Data,
 					}));
-					setMode(gameStateResult.phase as GameMode);
-				}
+					setMode(event.Data as GameMode);
 
-				// Handle other game events if they exist
-				if (Array.isArray(result)) {
-					result.forEach((event) => {
-						if (event.Action === "Phase-Change") {
-							setGamestate((prev) => ({
-								...prev,
-								phase: event.Data,
-							}));
-							setMode(event.Data as GameMode);
-						}
-					});
+					setSelectedPlayer(null);
+					setActionResult(null);
+
+					const alivePlayers = await dryrunResult(gameState.gameProcess, [
+						{
+							name: "Action",
+							value: "Get-Alive-Players",
+						},
+					]);
+					if (Array.isArray(alivePlayers)) {
+						setAlivePlayers(alivePlayers);
+					}
 				}
 			} catch (error) {
-				console.error("Error fetching game events:", error);
+				console.error("Error handling game event:", error);
 			}
 		};
 
-		const unsubscribe = subscribeToGameEvents(handleGameEvents, gameState);
+		const unsubscribe = subscribeToGameEvents(handleGameEvent, gameState);
 		return () => unsubscribe();
-	}, [setMode, gameState, setGamestate]);
+	}, [gameState, setMode, setGamestate]);
 
 	const handleNightAction = async (action: string) => {
 		if (!selectedPlayer) {
@@ -262,10 +254,13 @@ export const GameRound = () => {
 				},
 			]);
 
-			if (Messages?.[0]?.Data) {
+			if (Messages?.length > 0) {
 				if (role === "seer") {
-					// For seer, directly use the response as the role
-					setActionResult(Messages[1].Data);
+					// For seer, we need both messages:
+					// Messages[0] is the action confirmation
+					// Messages[1] contains the revealed role
+					alert(Messages[0].Data); // Show action confirmation
+					setActionResult(Messages[1].Data); // Set the revealed role
 
 					// Refresh visions list
 					const visionsResult = await dryrunResult(gameState.gameProcess, [
@@ -278,6 +273,7 @@ export const GameRound = () => {
 						setVisions(visionsResult);
 					}
 				} else {
+					// For other roles (doctor, werewolf), show the action confirmation
 					alert(Messages[0].Data);
 				}
 				setSelectedPlayer(null);

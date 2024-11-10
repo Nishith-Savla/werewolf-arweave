@@ -558,7 +558,14 @@ function TransitionToDay()
     -- Clear votes table for new day
     admin:exec('DELETE FROM votes')
 
-    -- Broadcast phase change
+    -- Broadcast phase change - Send two notifications to ensure delivery
+    ao.send({
+        Target = ao.id,
+        Action = "Phase-Change",
+        Data = "day"
+    })
+
+    -- Send a more detailed notification
     ao.send({
         Target = ao.id,
         Action = "Phase-Change",
