@@ -49,3 +49,71 @@
     opacity: 1;
   }
 } 
+
+/* Custom SweetAlert2 Styles */
+.swal2-popup {
+  background: #1e1e2f !important;
+  color: #ffffff !important;
+}
+
+.swal2-title {
+  color: #ffffff !important;
+}
+
+.swal2-toast {
+  background: #252541 !important;
+  color: #ffffff !important;
+}
+
+.swal2-timer-progress-bar {
+  background: #e76f51 !important;
+}
+
+/* Success Toast */
+.swal2-toast.swal2-icon-success {
+  border-left: 4px solid #2a9d8f !important;
+}
+
+/* Error Toast */
+.swal2-toast.swal2-icon-error {
+  border-left: 4px solid #e76f51 !important;
+}
+
+/* Warning Toast */
+.swal2-toast.swal2-icon-warning {
+  border-left: 4px solid #f4a261 !important;
+}
+
+/* Info Toast */
+.swal2-toast.swal2-icon-info {
+  border-left: 4px solid #264653 !important;
+}
+
+/* Modal Styles */
+.swal2-modal {
+  border-radius: 10px !important;
+}
+
+.swal2-confirm.swal2-styled {
+  background-color: #2a9d8f !important;
+  border-radius: 6px !important;
+}
+
+.swal2-deny.swal2-styled {
+  background-color: #e76f51 !important;
+  border-radius: 6px !important;
+}
+
+/* Progress Bar Animation */
+@keyframes progress {
+  0% {
+    width: 0;
+  }
+  100% {
+    width: 100%;
+  }
+}
+
+.swal2-timer-progress-bar {
+  animation: progress 5s linear;
+}

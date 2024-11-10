@@ -157,30 +157,21 @@ export const WaitingRoom = () => {
 					]);
 
 					if (gameStateResult?.phase === "night") {
-						const { Messages: roleMessages } = await messageResult(gameState.gameProcess, [
-							{
-								name: "Action",
-								value: "Get-Role",
-							},
-						]);
-
-						if (roleMessages?.[0]?.Data) {
-							setGamestate((prevState: GameState) => ({
-								...prevState,
-								phase: "night",
-							}));
-							setMode("night");
-						}
+						setGamestate((prev) => ({
+							...prev,
+							phase: "night",
+						}));
+						setMode("night");
 					}
 				} catch (error) {
 					console.error("Error checking game state:", error);
 				}
 			};
 
-			const interval = setInterval(checkGameState, 10000);
+			const interval = setInterval(checkGameState, 5000);
 			return () => clearInterval(interval);
 		}
-	}, [currentPlayer?.isCreator, gameState.gameProcess]);
+	}, [currentPlayer?.isCreator, gameState.gameProcess, setGamestate, setMode]);
 
 	const handleStartGame = async () => {
 		if (!currentPlayer?.isCreator) {
@@ -210,7 +201,7 @@ export const WaitingRoom = () => {
 				},
 			]);
 
-			console.log("Game state after start:", gameStateResult);
+			console.log("Game state after state:", gameStateResult);
 
 			if (gameStateResult?.phase === "night") {
 				// Update game state first

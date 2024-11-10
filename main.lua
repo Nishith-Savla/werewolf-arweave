@@ -6,7 +6,7 @@ local dbAdmin = require("@rakis/DbAdmin")
 db = sqlite3.open_memory()
 admin = dbAdmin.new(db)
 
--- Create tables
+-- Players table
 admin:exec([[
   CREATE TABLE IF NOT EXISTS players (
     id TEXT PRIMARY KEY,
@@ -18,6 +18,7 @@ admin:exec([[
   );
 ]])
 
+-- Game state table
 admin:exec([[
   CREATE TABLE IF NOT EXISTS game_state (
     id INTEGER PRIMARY KEY,
@@ -53,6 +54,17 @@ admin:exec([[
   );
 ]])
 
+-- Add events table
+admin:exec([[
+  CREATE TABLE IF NOT EXISTS game_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    action TEXT NOT NULL,
+    data TEXT NOT NULL,
+    timestamp INTEGER DEFAULT (strftime('%s','now')),
+    processed BOOLEAN DEFAULT FALSE
+  );
+]])
+
 -- Game state variables
 GameState = {
     phase = "lobby",
@@ -82,6 +94,7 @@ ExtraRoles = {
     "villager",
     "werewolf"
 }
+
 -- Register new player
 Handlers.add(
     "Register-Player",
@@ -325,8 +338,7 @@ function ResolveDayPhase()
     ]], {})
 
     if #voteResults == 0 then
-        ao.send({
-            Target = ao.id,
+        BroadcastGameEvent({
             Action = "Vote-Error",
             Data = "No votes recorded"
         })
@@ -345,8 +357,7 @@ function ResolveDayPhase()
 
     -- If there's a tie, skip elimination
     if #tiedPlayers > 1 then
-        ao.send({
-            Target = ao.id,
+        BroadcastGameEvent({
             Action = "Vote-Result",
             Data = {
                 result = "tie",
@@ -358,11 +369,10 @@ function ResolveDayPhase()
     else
         -- Single player with highest votes
         local eliminatedPlayer = tiedPlayers[1]
-        local playerData = admin:select('SELECT name FROM players WHERE id = ?;', { eliminatedPlayer })
+        local playerData = admin:select('SELECT name, role FROM players WHERE id = ?;', { eliminatedPlayer })
         
         if #playerData == 0 then
-            ao.send({
-                Target = ao.id,
+            BroadcastGameEvent({
                 Action = "Vote-Error",
                 Data = "Failed to find eliminated player"
             })
@@ -375,13 +385,13 @@ function ResolveDayPhase()
             { eliminatedPlayer }
         )
         
-        -- Announce elimination
-        ao.send({
-            Target = ao.id,
+        -- Announce elimination with role reveal
+        BroadcastGameEvent({
             Action = "Player-Eliminated",
             Data = {
                 playerId = eliminatedPlayer,
                 playerName = playerData[1].name,
+                playerRole = playerData[1].role,
                 voteCount = maxVotes
             }
         })
@@ -408,8 +418,7 @@ function ResolveDayPhase()
     }
 
     -- Announce phase change
-    ao.send({
-        Target = ao.id,
+    BroadcastGameEvent({
         Action = "Phase-Change",
         Data = {
             phase = "night",
@@ -418,7 +427,7 @@ function ResolveDayPhase()
         }
     })
 
-    -- Check win conditions only if someone was eliminated
+    -- Check win conditions
     if #tiedPlayers == 1 then
         CheckWinConditions()
     end
@@ -618,9 +627,10 @@ Handlers.add(
 function ResolveNightActions()
     -- Get all night actions for the current round, ordered by timestamp
     local nightActions = admin:select([[
-        SELECT na.*, p.is_alive 
+        SELECT na.*, p.is_alive, p.name as actor_name, t.name as target_name
         FROM night_actions na
         JOIN players p ON na.actor_id = p.id
+        JOIN players t ON na.target_id = t.id
         WHERE na.round = ? 
         ORDER BY na.timestamp ASC
     ]], { GameState.round })
@@ -632,6 +642,12 @@ function ResolveNightActions()
     for _, action in ipairs(nightActions) do
         if action.action_type == "protect" and action.is_alive then
             table.insert(protections, action.target_id)
+            BroadcastGameEvent({
+                Action = "Player-Protected",
+                Data = {
+                    targetName = action.target_name
+                }
+            })
         end
     end
 
@@ -656,28 +672,12 @@ function ResolveNightActions()
                     { targetId }
                 )
 
-                -- Get player name for announcement
-                local playerName = admin:select(
-                    'SELECT name FROM players WHERE id = ?',
-                    { targetId }
-                )[1].name
-
-                -- Announce death
-                ao.send({
-                    Target = ao.id,
+                BroadcastGameEvent({
                     Action = "Player-Death",
                     Data = {
                         playerId = targetId,
-                        playerName = playerName
-                    }
-                })
-            else
-                -- Announce protection (optional)
-                ao.send({
-                    Target = ao.id,
-                    Action = "Player-Protected",
-                    Data = {
-                        playerId = targetId
+                        playerName = action.target_name,
+                        killerRole = "werewolf"
                     }
                 })
             end
@@ -906,4 +906,100 @@ function SafeDBOperation(operation, params)
         return nil, "Database operation failed"
     end
     return result
+end
+
+-- Function to add event to the queue
+function AddGameEvent(event)
+    -- Convert event data to JSON string
+    local jsonData = json.encode(event.Data)
+    
+    -- Insert event into database with processed flag
+    admin:apply([[
+        INSERT INTO game_events (action, data, timestamp, processed)
+        VALUES (?, ?, strftime('%s','now'), FALSE);
+    ]], { 
+        event.Action,
+        jsonData
+    })
+    
+    -- Clean up old processed events (keep last hour)
+    admin:exec([[
+        DELETE FROM game_events 
+        WHERE timestamp < strftime('%s','now') - 3600
+        AND processed = TRUE;
+    ]])
+end
+
+-- Function to get and mark events as processed
+Handlers.add(
+    "Get-Game-Events",
+    function(msg)
+        -- Get unprocessed events
+        local events = admin:select([[
+            SELECT id, action, data, timestamp 
+            FROM game_events 
+            WHERE processed = FALSE
+            ORDER BY timestamp ASC;
+        ]], {})
+
+        -- Mark these events as processed
+        if #events > 0 then
+            local eventIds = {}
+            for _, event in ipairs(events) do
+                table.insert(eventIds, event.id)
+            end
+            
+            -- Convert to proper format for frontend
+            local formattedEvents = {}
+            for _, event in ipairs(events) do
+                table.insert(formattedEvents, {
+                    Action = event.action,
+                    Data = json.decode(event.data)
+                })
+            end
+
+            -- Mark events as processed
+            admin:exec([[
+                UPDATE game_events 
+                SET processed = TRUE 
+                WHERE id IN (]] .. table.concat(eventIds, ",") .. [[);
+            ]])
+
+            msg.reply({ Data = formattedEvents })
+        else
+            msg.reply({ Data = {} })
+        end
+    end
+)
+
+-- Function to broadcast and store game event
+function BroadcastGameEvent(event)
+    -- Send to all players
+    ao.send({
+        Target = ao.id,
+        Action = event.Action,
+        Data = event.Data
+    })
+    
+    -- Store in database using AddGameEvent
+    AddGameEvent(event)
+end
+
+-- Add function to check if game should end
+function CheckGameEnd()
+    local alivePlayers = admin:exec([[
+        SELECT COUNT(*) as count 
+        FROM players 
+        WHERE is_alive = TRUE
+    ]])[1].count
+
+    if alivePlayers == 0 then
+        BroadcastGameEvent({
+            Action = "Game-Over",
+            Data = "No players remaining"
+        })
+        return true
+    end
+    
+    return false
 end
