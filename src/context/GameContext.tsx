@@ -1,42 +1,45 @@
-import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from "react";
+import { GamePhase, GameState as GameTypeState, PlayerRole, UIState } from "@/types/game";
+import {
+	createContext,
+	Dispatch,
+	ReactNode,
+	SetStateAction,
+	useContext,
+	useEffect,
+	useMemo,
+	useState,
+} from "react";
 
-export type GameMode = "landing" | "waiting" | "night" | "day";
+export type GameMode = UIState;
 
-interface Player {
+export interface Player {
 	id: string;
 	name: string;
-	role?: string;
+	role?: PlayerRole;
 	isAlive: boolean;
-	isCreator?: boolean;
-}
-
-interface GameState {
-	gameProcess: string;
-	phase: string;
-	currentRound: number;
-	currentTimestamp: number;
+	isCreator: boolean;
 }
 
 interface GameContextType {
 	mode: GameMode;
-	setMode: (newState: GameMode) => void;
+	setMode: Dispatch<SetStateAction<GameMode>>;
 	currentPlayer: Player | null;
-	setCurrentPlayer: (player: Player | null) => void;
+	setCurrentPlayer: Dispatch<SetStateAction<Player | null>>;
 	joinedPlayers: Player[];
-	setJoinedPlayers: (players: Player[]) => void;
-	gameState: GameState;
-	setGamestate: (gamestate: GameState | ((prevState: GameState) => GameState)) => void;
+	setJoinedPlayers: Dispatch<SetStateAction<Player[]>>;
+	gameState: GameTypeState;
+	setGamestate: Dispatch<SetStateAction<GameTypeState>>;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
 export const GameProvider = ({ children }: { children: ReactNode }) => {
-	const [mode, setMode] = useState<GameMode>("landing");
+	const [mode, setMode] = useState<GameMode>(UIState.Landing);
 	const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null);
 	const [joinedPlayers, setJoinedPlayers] = useState<Player[]>([]);
-	const [gameState, setGamestate] = useState<any>({
+	const [gameState, setGamestate] = useState<GameTypeState>({
 		gameProcess: "hvWU6L4AzaP5zy_5syA6Hn2IHEgzQdimUZSsEmkHheY",
-		phase: "lobby",
+		phase: GamePhase.Lobby,
 		currentRound: 0,
 		currentTimestamp: 0,
 	});

@@ -1,9 +1,9 @@
-import { Player } from "@/types/game";
 import { ConnectButton, useActiveAddress, useConnection } from "arweave-wallet-kit";
 import { useEffect } from "react";
 import { useGameContext } from "../context/GameContext";
 import { dryrunResult, formatAddress, messageResult } from "../lib/utils";
 import "./LandingPage.css";
+import { UIState } from "@/types/game";
 
 export const LandingPage = () => {
 	const { currentPlayer, setCurrentPlayer, gameState } = useGameContext();
@@ -139,7 +139,7 @@ const JoinGame = () => {
 				Messages?.[0]?.Data.includes("Already registered")
 			) {
 				console.log("Setting mode to waiting");
-				setMode("waiting");
+				setMode(UIState.Waiting);
 			} else {
 				console.warn("Unexpected registration response:", Messages?.[0]?.Data);
 			}

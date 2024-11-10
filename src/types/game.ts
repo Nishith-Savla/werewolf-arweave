@@ -1,5 +1,18 @@
-export type GamePhase = 'lobby' | 'day' | 'night' | 'ended';
-export type PlayerRole = 'werewolf' | 'villager' | 'seer' | 'doctor';
+export enum GamePhase {
+  Lobby = "lobby",
+  Day = "day",
+  Night = "night",
+  Ended = "ended",
+}
+
+export enum UIState {
+  Landing = "landing",
+  Waiting = "waiting",
+  Night = "night",
+  Day = "day",
+}
+
+export type PlayerRole = "werewolf" | "villager" | "seer" | "doctor";
 
 export interface Player {
   id: string;
@@ -19,4 +32,19 @@ export interface GameState {
 export interface GameAction {
   type: string;
   payload?: any;
-} 
+}
+
+export const phaseToUIState = (phase: GamePhase): UIState => {
+  switch (phase) {
+    case GamePhase.Lobby:
+      return UIState.Waiting;
+    case GamePhase.Night:
+      return UIState.Night;
+    case GamePhase.Day:
+      return UIState.Day;
+    case GamePhase.Ended:
+      return UIState.Landing; // Adjust as needed
+    default:
+      return UIState.Landing;
+  }
+};

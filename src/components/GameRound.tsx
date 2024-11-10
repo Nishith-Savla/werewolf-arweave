@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { GameMode } from "../context/GameContext";
+import { GamePhase, phaseToUIState } from "@/types/game";
 import { useGameContext } from "../context/GameContext";
 import { dryrunResult, messageResult } from "../lib/utils";
 import { GameNotifications } from "./GameNotifications";
@@ -205,11 +205,12 @@ export const GameRound = () => {
 		const handleGameEvent = async (event: GameEvent) => {
 			try {
 				if (event.Action === "Phase-Change") {
+					const newPhase = event.Data as GamePhase;
 					setGamestate((prev) => ({
 						...prev,
-						phase: event.Data,
+						phase: newPhase,
 					}));
-					setMode(event.Data as GameMode);
+					setMode(phaseToUIState(newPhase));
 
 					setSelectedPlayer(null);
 					setActionResult(null);
@@ -353,7 +354,7 @@ export const GameRound = () => {
 	};
 
 	const renderGameActions = () => {
-		if (gameState.phase === "night" && role) {
+		if (gameState.phase === GamePhase.Night && role) {
 			if (isAlive === false) {
 				return (
 					<div className="night-actions">
@@ -450,7 +451,7 @@ export const GameRound = () => {
 					</div>
 				</div>
 			);
-		} else if (gameState.phase === "day") {
+		} else if (gameState.phase === GamePhase.Day) {
 			if (isAlive === false) {
 				return (
 					<div className="day-actions">

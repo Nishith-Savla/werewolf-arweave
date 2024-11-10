@@ -1,17 +1,9 @@
 import { Button } from "@/components/ui/button";
-import { GameState } from "@/types/game";
+import { GameState, GamePhase, phaseToUIState, UIState, Player } from "@/types/game";
 import { useCallback, useEffect, useState } from "react";
 import { useGameContext } from "../context/GameContext";
 import { dryrunResult, messageResult } from "../lib/utils";
 import "./WaitingRoom.css";
-
-interface PlayerResponse {
-	id?: string;
-	address?: string;
-	name?: string;
-	displayName?: string;
-	isCreator?: boolean;
-}
 
 export const WaitingRoom = () => {
 	const {
@@ -38,16 +30,16 @@ export const WaitingRoom = () => {
 				},
 			]);
 			console.log("Game state result:", gameStateResult);
-			if (gameStateResult?.phase === "night") {
+			if (gameStateResult?.phase === GamePhase.Night) {
 				setGamestate((prevState: GameState) => ({
 					...prevState,
-					phase: "night",
+					phase: GamePhase.Night,
 				}));
-				setMode("night");
+				setMode(phaseToUIState(GamePhase.Night));
 				setIsLoading(false);
 				return;
 			}
-			if (gameStateResult?.phase === "lobby") {
+			if (gameStateResult?.phase === GamePhase.Lobby) {
 				const result = await dryrunResult(gameState.gameProcess, [
 					{
 						name: "Action",
@@ -76,10 +68,13 @@ export const WaitingRoom = () => {
 						console.log("Found player data:", playerData);
 
 						if (playerData?.isCreator !== currentPlayer.isCreator) {
-							setCurrentPlayer((prev) => ({
-								...prev!,
-								isCreator: playerData?.isCreator || false,
-							}));
+							setCurrentPlayer(
+								(prev) =>
+									({
+										...prev!,
+										isCreator: playerData?.isCreator || false,
+									} as Player)
+							);
 						}
 					}
 
@@ -112,7 +107,7 @@ export const WaitingRoom = () => {
 		const checkRegistration = async () => {
 			if (!currentPlayer?.id) {
 				console.log("No player ID found, redirecting to landing");
-				setMode("landing");
+				setMode(UIState.Landing);
 				return;
 			}
 
@@ -132,13 +127,13 @@ export const WaitingRoom = () => {
 
 				if (!playerExists) {
 					console.log("Player not registered, redirecting to landing");
-					setMode("landing");
+					setMode(UIState.Landing);
 				}
 
 				console.log("Player registration check result:", result);
 			} catch (error) {
 				console.error("Error checking registration:", error);
-				setMode("landing");
+				setMode(UIState.Landing);
 			}
 		};
 
@@ -156,12 +151,12 @@ export const WaitingRoom = () => {
 						},
 					]);
 
-					if (gameStateResult?.phase === "night") {
+					if (gameStateResult?.phase === GamePhase.Night) {
 						setGamestate((prev) => ({
 							...prev,
-							phase: "night",
+							phase: GamePhase.Night,
 						}));
-						setMode("night");
+						setMode(phaseToUIState(GamePhase.Night));
 					}
 				} catch (error) {
 					console.error("Error checking game state:", error);
@@ -203,15 +198,15 @@ export const WaitingRoom = () => {
 
 			console.log("Game state after state:", gameStateResult);
 
-			if (gameStateResult?.phase === "night") {
+			if (gameStateResult?.phase === GamePhase.Night) {
 				// Update game state first
 				setGamestate((prevState: GameState) => ({
 					...prevState,
-					phase: "night",
+					phase: GamePhase.Night,
 				}));
 
 				// Then update mode
-				setMode("night");
+				setMode(phaseToUIState(GamePhase.Night));
 				setIsLoading(false);
 			} else {
 				throw new Error(`Unexpected game state: ${gameStateResult?.phase}`);
@@ -238,12 +233,12 @@ export const WaitingRoom = () => {
 				// Reset game state to initial values
 				setGamestate((prevState: GameState) => ({
 					...prevState,
-					phase: "lobby",
+					phase: GamePhase.Lobby,
 				}));
 				// Clear joined players
 				setJoinedPlayers([]);
 				// Navigate back to landing
-				setMode("landing");
+				setMode(UIState.Landing);
 			}
 		} catch (error) {
 			console.error("Error leaving room:", error);

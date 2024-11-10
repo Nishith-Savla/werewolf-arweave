@@ -1,3 +1,4 @@
+import { GamePhase, phaseToUIState } from "@/types/game";
 import { useCallback, useEffect, useRef } from "react";
 import Swal from "sweetalert2";
 import { useGameContext } from "../context/GameContext";
@@ -17,8 +18,8 @@ const Toast = Swal.mixin({
 
 export const useGameEvents = () => {
 	const { gameState, setGamestate, setMode } = useGameContext();
-	const lastPhase = useRef(gameState.phase);
-	const processedEvents = useRef(new Set<string>());
+	const lastPhase = useRef<GamePhase>(gameState.phase);
+	const processedEvents = useRef<Set<string>>(new Set());
 
 	const handleGameEvent = useCallback(
 		async (event: any) => {
@@ -32,12 +33,13 @@ export const useGameEvents = () => {
 
 			switch (event.Action) {
 				case "Phase-Change":
-					const phase = typeof event.Data === "string" ? event.Data : event.Data.phase;
+					const phase =
+						typeof event.Data === "string" ? event.Data : (event.Data.phase as GamePhase);
 
 					if (phase !== lastPhase.current) {
 						lastPhase.current = phase;
 						setGamestate((prev) => ({ ...prev, phase }));
-						setMode(phase);
+						setMode(phaseToUIState(phase));
 
 						const message =
 							typeof event.Data === "string" ? `Phase changed to ${phase}` : event.Data.message;
@@ -106,6 +108,10 @@ export const useGameEvents = () => {
 						icon: "error",
 						title: event.Data.message || "Error during voting",
 					});
+					break;
+
+				default:
+					console.warn(`Unhandled game event action: ${event.Action}`);
 					break;
 			}
 		},
