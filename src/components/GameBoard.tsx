@@ -48,7 +48,7 @@ export default function GameBoard({ currentPlayer }: GameBoardProps) {
 			}
 		};
 
-		const interval = setInterval(fetchGameData, 2000);
+		const interval = setInterval(fetchGameData, 5000);
 		return () => clearInterval(interval);
 	}, [gameState.gameProcess, setGamestate]);
 

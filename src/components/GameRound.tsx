@@ -72,6 +72,7 @@ export const GameRound = () => {
 	const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
 	const [visions, setVisions] = useState<Array<{ target: string; role: string }>>([]);
 	const [actionResult, setActionResult] = useState<string | null>(null);
+	const [isAlive, setIsAlive] = useState<boolean>(true);
 
 	// Fetch alive players
 	useEffect(() => {
@@ -232,6 +233,42 @@ export const GameRound = () => {
 		return () => unsubscribe();
 	}, [gameState, setMode, setGamestate]);
 
+	useEffect(() => {
+		const checkAliveStatus = async () => {
+			if (!currentPlayer?.id) return;
+
+			try {
+				const { Messages } = await messageResult(gameState.gameProcess, [
+					{
+						name: "Action",
+						value: "Check-Alive",
+					},
+				]);
+
+				console.log("Check-Alive response:", Messages);
+
+				// Handle the response more carefully
+				if (Messages && Messages[0]) {
+					const isAliveResponse = Messages[0].Data;
+					console.log("Is alive response:", isAliveResponse);
+					setIsAlive(isAliveResponse === true || isAliveResponse === 1);
+				} else {
+					console.warn("No response from Check-Alive");
+					setIsAlive(false); // Assume dead if no response
+				}
+			} catch (error) {
+				console.error("Error checking alive status:", error);
+				setIsAlive(false); // Assume dead if error
+			}
+		};
+
+		checkAliveStatus();
+
+		const interval = setInterval(checkAliveStatus, 10000);
+
+		return () => clearInterval(interval);
+	}, [currentPlayer?.id, gameState.gameProcess]);
+
 	const handleNightAction = async (action: string) => {
 		if (!selectedPlayer) {
 			alert("Please select a player first");
@@ -290,7 +327,20 @@ export const GameRound = () => {
 		}
 
 		try {
+			// First check if player is alive
 			const { Messages } = await messageResult(gameState.gameProcess, [
+				{
+					name: "Action",
+					value: "Check-Alive",
+				},
+			]);
+
+			if (Messages?.[0]?.Data === false) {
+				alert("You cannot vote because you are dead");
+				return;
+			}
+
+			const voteResult = await messageResult(gameState.gameProcess, [
 				{
 					name: "Action",
 					value: "Vote",
@@ -301,17 +351,39 @@ export const GameRound = () => {
 				},
 			]);
 
-			if (Messages?.[0]?.Data) {
-				alert(Messages[0].Data);
+			if (voteResult.Messages?.[0]?.Data) {
+				alert(voteResult.Messages[0].Data);
 				setSelectedPlayer(null);
 			}
 		} catch (error) {
 			console.error("Error voting:", error);
+			alert("Failed to cast vote");
 		}
 	};
 
 	const renderGameActions = () => {
 		if (gameState.phase === "night" && role) {
+			if (isAlive === false) {
+				return (
+					<div className="night-actions">
+						<h3 className="text-xl font-semibold mb-4">Night Phase</h3>
+						<div className="dead-player-message p-4 bg-red-100 border border-red-400 rounded">
+							<p className="text-red-700">You are dead and cannot perform night actions.</p>
+							<p className="text-gray-600 mt-2">You can continue to watch the game unfold.</p>
+						</div>
+					</div>
+				);
+			}
+			// Only show night actions for roles that can act at night
+			if (role === "villager") {
+				return (
+					<div className="night-actions">
+						<h3 className="text-xl font-semibold mb-4">Night Phase</h3>
+						<p>You are a villager. Wait for others to complete their night actions.</p>
+					</div>
+				);
+			}
+
 			return (
 				<div className="night-actions">
 					<h3 className="text-xl font-semibold mb-4">Night Actions</h3>
@@ -342,14 +414,17 @@ export const GameRound = () => {
 							className="w-full p-2 rounded border"
 						>
 							<option value="">Select a player</option>
-							{alivePlayers.map(
-								(player) =>
-									player.id !== currentPlayer?.id && (
-										<option key={player.id} value={player.id}>
-											{player.name}
-										</option>
-									)
-							)}
+							{alivePlayers.map((player) => {
+								// Skip self-selection for seer only
+								if (role === "seer" && player.id === currentPlayer?.id) {
+									return null;
+								}
+								return (
+									<option key={player.id} value={player.id}>
+										{player.name} {player.id === currentPlayer?.id ? "(You)" : ""}
+									</option>
+								);
+							})}
 						</select>
 					</div>
 
@@ -385,6 +460,18 @@ export const GameRound = () => {
 				</div>
 			);
 		} else if (gameState.phase === "day") {
+			if (!isAlive) {
+				return (
+					<div className="day-actions">
+						<h3 className="text-xl font-semibold mb-4">Day Phase</h3>
+						<div className="dead-player-message p-4 bg-red-100 border border-red-400 rounded">
+							<p className="text-red-700">You are dead and cannot participate in voting.</p>
+							<p className="text-gray-600 mt-2">You can continue to watch the game unfold.</p>
+						</div>
+					</div>
+				);
+			}
+
 			return (
 				<div className="day-actions">
 					<h3 className="text-xl font-semibold mb-4">Day Actions</h3>
@@ -405,7 +492,10 @@ export const GameRound = () => {
 							)}
 						</select>
 					</div>
-					<button onClick={handleVote} className="bg-purple-600 text-white px-4 py-2 rounded">
+					<button
+						onClick={handleVote}
+						className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 transition-colors"
+					>
 						Vote Player
 					</button>
 				</div>

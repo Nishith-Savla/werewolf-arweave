@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { GameState, Player } from "@/types/game";
+import { GameState } from "@/types/game";
 import { useCallback, useEffect, useState } from "react";
 import { useGameContext } from "../context/GameContext";
 import { dryrunResult, messageResult } from "../lib/utils";
@@ -74,7 +74,7 @@ export const WaitingRoom = () => {
 					if (currentPlayer) {
 						const playerData = validPlayers.find((p) => p.id === currentPlayer.id);
 						console.log("Found player data:", playerData);
-						
+
 						if (playerData?.isCreator !== currentPlayer.isCreator) {
 							setCurrentPlayer((prev) => ({
 								...prev!,
@@ -242,6 +242,16 @@ export const WaitingRoom = () => {
 			]);
 
 			if (Messages?.[0]?.Data === "Left game") {
+				// Reset player state
+				setCurrentPlayer(null);
+				// Reset game state to initial values
+				setGamestate((prevState: GameState) => ({
+					...prevState,
+					phase: "lobby",
+				}));
+				// Clear joined players
+				setJoinedPlayers([]);
+				// Navigate back to landing
 				setMode("landing");
 			}
 		} catch (error) {

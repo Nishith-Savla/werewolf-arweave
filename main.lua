@@ -77,12 +77,11 @@ RequiredRoles = {
 
 -- Additional roles based on player count
 ExtraRoles = {
-    "werewolf",
     "villager",
     "villager",
-    "villager"
+    "villager",
+    "werewolf"
 }
-
 -- Register new player
 Handlers.add(
     "Register-Player",
@@ -251,6 +250,15 @@ Handlers.add(
         -- Check if voter is alive
         local voterAlive = admin:select('SELECT is_alive FROM players WHERE id = ?;', { voter })
         if #voterAlive == 0 or not voterAlive[1].is_alive then
+            -- Send a broadcast message about dead player attempting to vote
+            ao.send({
+                Target = ao.id,
+                Action = "Vote-Error",
+                Data = {
+                    message = "Dead players cannot vote",
+                    playerId = voter
+                }
+            })
             msg.reply({ Data = "Dead players cannot vote" })
             return
         end
@@ -325,7 +333,7 @@ function ResolveDayPhase()
         return
     end
 
-    -- Handle tie cases
+    -- Check for ties
     local maxVotes = voteResults[1].vote_count
     local tiedPlayers = {}
     
@@ -335,11 +343,21 @@ function ResolveDayPhase()
         end
     end
 
-    -- Randomly select from tied players
-    local eliminatedPlayer = tiedPlayers[math.random(#tiedPlayers)]
-
-    if eliminatedPlayer then
-        -- Get player name with proper parameter array
+    -- If there's a tie, skip elimination
+    if #tiedPlayers > 1 then
+        ao.send({
+            Target = ao.id,
+            Action = "Vote-Result",
+            Data = {
+                result = "tie",
+                message = "Vote resulted in a tie. No one was eliminated.",
+                tiedPlayers = tiedPlayers,
+                voteCount = maxVotes
+            }
+        })
+    else
+        -- Single player with highest votes
+        local eliminatedPlayer = tiedPlayers[1]
         local playerData = admin:select('SELECT name FROM players WHERE id = ?;', { eliminatedPlayer })
         
         if #playerData == 0 then
@@ -351,33 +369,13 @@ function ResolveDayPhase()
             return
         end
 
-        -- Kill the selected player with proper parameter array
+        -- Kill the selected player
         admin:apply(
             'UPDATE players SET is_alive = FALSE WHERE id = ?;',
             { eliminatedPlayer }
         )
         
-        -- Clear votes
-        admin:exec('DELETE FROM votes;')
-
-        -- Move to night phase
-        GameState.phase = "night"
-        GameState.round = GameState.round + 1
-        
-        -- Update game state with proper parameter array
-        admin:apply(
-            'UPDATE game_state SET phase = ?, round = ? WHERE id = 1;',
-            { "night", GameState.round }
-        )
-
-        -- Reset night actions
-        GameState.nightActionsComplete = {
-            werewolf = false,
-            doctor = false,
-            seer = false
-        }
-
-        -- Announce elimination and phase change
+        -- Announce elimination
         ao.send({
             Target = ao.id,
             Action = "Player-Eliminated",
@@ -387,18 +385,41 @@ function ResolveDayPhase()
                 voteCount = maxVotes
             }
         })
+    end
 
-        ao.send({
-            Target = ao.id,
-            Action = "Phase-Change",
-            Data = {
-                phase = "night",
-                round = GameState.round,
-                message = "Night falls on the village..."
-            }
-        })
+    -- Clear votes
+    admin:exec('DELETE FROM votes;')
 
-        -- Check win conditions
+    -- Move to night phase
+    GameState.phase = "night"
+    GameState.round = GameState.round + 1
+    
+    -- Update game state
+    admin:apply(
+        'UPDATE game_state SET phase = ?, round = ? WHERE id = 1;',
+        { "night", GameState.round }
+    )
+
+    -- Reset night actions
+    GameState.nightActionsComplete = {
+        werewolf = false,
+        doctor = false,
+        seer = false
+    }
+
+    -- Announce phase change
+    ao.send({
+        Target = ao.id,
+        Action = "Phase-Change",
+        Data = {
+            phase = "night",
+            round = GameState.round,
+            message = "Night falls on the village..."
+        }
+    })
+
+    -- Check win conditions only if someone was eliminated
+    if #tiedPlayers == 1 then
         CheckWinConditions()
     end
 end
@@ -421,24 +442,6 @@ function ResetNightActions()
     }
 end
 
--- Add debug function to check night actions status
-function DebugNightActions()
-    return {
-        werewolf = GameState.nightActionsComplete.werewolf,
-        doctor = GameState.nightActionsComplete.doctor,
-        seer = GameState.nightActionsComplete.seer,
-        phase = GameState.phase
-    }
-end
-
--- Add debug handler
-Handlers.add(
-    "Debug-Night-Actions",
-    function(msg)
-        msg.reply({ Data = DebugNightActions() })
-    end
-)
-
 -- Modify Night action handler
 Handlers.add(
     "Night-Action",
@@ -451,18 +454,6 @@ Handlers.add(
         local actor = msg.From
         local target = msg.Tags.Target
         local action = msg.Tags.ActionType
-
-        -- Debug output
-        ao.send({
-            Target = ao.id,
-            Action = "Debug",
-            Data = {
-                message = "Night action attempted",
-                phase = GameState.phase,
-                actor = actor,
-                action = action
-            }
-        })
 
         -- Check if actor has already acted
         if NightActions.actedPlayers[actor] then
@@ -506,25 +497,11 @@ Handlers.add(
 
         -- If action was recorded, check for phase transition
         if actionRecorded then
-            -- Debug broadcast
-            ao.send({
-                Target = ao.id,
-                Action = "Night-Action-Status",
-                Data = DebugNightActions()
-            })
-
             -- Check if all required night actions are complete
             if GameState.nightActionsComplete.werewolf and 
                GameState.nightActionsComplete.doctor and 
                GameState.nightActionsComplete.seer then
                 
-                -- Debug broadcast
-                ao.send({
-                    Target = ao.id,
-                    Action = "Night-Complete",
-                    Data = "All actions completed"
-                })
-
                 -- Process night actions and transition to day phase
                 TransitionToDay()
             end
@@ -573,17 +550,6 @@ function TransitionToDay()
             phase = "day",
             round = GameState.round,
             message = "Night has ended. The village awakens to vote..."
-        }
-    })
-
-    -- Debug output
-    ao.send({
-        Target = ao.id,
-        Action = "Debug",
-        Data = {
-            message = "Transitioned to day phase",
-            newPhase = GameState.phase,
-            round = GameState.round
         }
     })
 end
@@ -650,56 +616,71 @@ Handlers.add(
 
 -- Function to resolve night actions
 function ResolveNightActions()
-    -- Process kills and protections
+    -- Get all night actions for the current round, ordered by timestamp
     local nightActions = admin:select([[
-        SELECT * FROM night_actions 
-        WHERE round = ? 
-        ORDER BY timestamp ASC
+        SELECT na.*, p.is_alive 
+        FROM night_actions na
+        JOIN players p ON na.actor_id = p.id
+        WHERE na.round = ? 
+        ORDER BY na.timestamp ASC
     ]], { GameState.round })
 
     local kills = {}
     local protections = {}
 
-    -- Separate actions by type
+    -- First pass: Process only protection actions from alive players
     for _, action in ipairs(nightActions) do
-        if action.action_type == "kill" then
-            table.insert(kills, action.target_id)
-        elseif action.action_type == "protect" then
+        if action.action_type == "protect" and action.is_alive then
             table.insert(protections, action.target_id)
         end
     end
 
-    -- Process kills (checking for protection)
-    for _, targetId in ipairs(kills) do
-        local isProtected = false
-        for _, protectedId in ipairs(protections) do
-            if targetId == protectedId then
-                isProtected = true
-                break
+    -- Second pass: Process kills from alive players and apply protections
+    for _, action in ipairs(nightActions) do
+        if action.action_type == "kill" and action.is_alive then
+            local targetId = action.target_id
+            local isProtected = false
+
+            -- Check if target is protected
+            for _, protectedId in ipairs(protections) do
+                if targetId == protectedId then
+                    isProtected = true
+                    break
+                end
             end
-        end
 
-        if not isProtected then
-            -- Kill the player
-            admin:apply(
-                'UPDATE players SET is_alive = FALSE WHERE id = ?',
-                { targetId }
-            )
+            if not isProtected then
+                -- Kill the player
+                admin:apply(
+                    'UPDATE players SET is_alive = FALSE WHERE id = ?',
+                    { targetId }
+                )
 
-            -- Announce death
-            local playerName = admin:select(
-                'SELECT name FROM players WHERE id = ?',
-                { targetId }
-            )[1].name
+                -- Get player name for announcement
+                local playerName = admin:select(
+                    'SELECT name FROM players WHERE id = ?',
+                    { targetId }
+                )[1].name
 
-            ao.send({
-                Target = ao.id,
-                Action = "Player-Death",
-                Data = {
-                    playerId = targetId,
-                    playerName = playerName
-                }
-            })
+                -- Announce death
+                ao.send({
+                    Target = ao.id,
+                    Action = "Player-Death",
+                    Data = {
+                        playerId = targetId,
+                        playerName = playerName
+                    }
+                })
+            else
+                -- Announce protection (optional)
+                ao.send({
+                    Target = ao.id,
+                    Action = "Player-Protected",
+                    Data = {
+                        playerId = targetId
+                    }
+                })
+            end
         end
     end
 
@@ -767,19 +748,23 @@ Handlers.add(
     "Check-Alive",
     "Check-Alive",
     function(msg)
-        local targetId = msg.Data.playerId or msg.From
-        local player = admin:select('SELECT is_alive FROM players WHERE id = ?;', { targetId })
+        local player = admin:select('SELECT is_alive FROM players WHERE id = ?;', { msg.From })
+        
         if #player == 0 then
             msg.reply({ Data = false })
             return
         end
-        msg.reply({ Data = player[1].is_alive })
+
+        -- SQLite stores booleans as 1 or 0
+        local isAlive = player[1].is_alive == 1
+
+        msg.reply({ Data = isAlive })
     end
 )
 
 -- Get seer visions handler
 Handlers.add(
-    "et-Visions",
+    "Get-Visions",
     function(msg)
         -- Verify seer
         local player = admin:select('SELECT role FROM players WHERE id = ?', { msg.From })

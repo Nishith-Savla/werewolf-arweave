@@ -26,3 +26,22 @@ button:disabled {
 .game-info {
     @apply text-center bg-white p-4 rounded-lg shadow-sm;
 }
+
+.dead-player-message {
+    text-align: center;
+    margin: 1rem 0;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
