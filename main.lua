@@ -1017,7 +1017,6 @@ admin:exec([[
 -- Send chat message handler
 Handlers.add(
   "Send-Chat-Message",
-  "Send-Chat-Message",
   function(msg)
     -- Check if player is alive
     local player = admin:select('SELECT name, is_alive FROM players WHERE id = ?;', { msg.From })
@@ -1026,10 +1025,10 @@ Handlers.add(
       return
     end
 
-    -- Insert message
+    -- Insert message using the player's name from the database
     admin:apply(
       'INSERT INTO chat_messages (player_id, player_name, message, timestamp) VALUES (?, ?, ?, ?);',
-      { msg.From, player[1].name, msg.Tags.Message, msg.Timestamp }
+      { msg.From, player[1].name, msg.Tags.Message, os.time() }
     )
     
     msg.reply({ Data = "Message sent" })

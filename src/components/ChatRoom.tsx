@@ -52,6 +52,10 @@ export const ChatRoom = () => {
           name: 'Message',
           value: newMessage,
         },
+        {
+          name: 'PlayerName',
+          value: currentPlayer.name
+        }
       ]);
 
       setNewMessage('');
@@ -85,6 +89,7 @@ export const ChatRoom = () => {
             <span className="message-content">{msg.message}</span>
           </div>
         ))}
+        <div ref={messagesEndRef} />
       </div>
       <div className="chat-input">
         <input
