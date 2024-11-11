@@ -1045,7 +1045,7 @@ Handlers.add(
     local messages = admin:exec([[
       SELECT player_id, player_name, message, timestamp 
       FROM chat_messages 
-      ORDER BY timestamp DESC 
+      ORDER BY timestamp DESC
       LIMIT 50
     ]])
     
