@@ -16,14 +16,6 @@ export const ChatRoom = () => {
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
   useEffect(() => {
     const fetchMessages = async () => {
       try {
@@ -35,7 +27,8 @@ export const ChatRoom = () => {
         ]);
         
         if (Messages?.[0]?.Data) {
-          setMessages(JSON.parse(Messages[0].Data));
+          const parsedMessages = JSON.parse(Messages[0].Data);
+          setMessages(parsedMessages);
         }
       } catch (error) {
         console.error('Error fetching messages:', error);
@@ -92,7 +85,6 @@ export const ChatRoom = () => {
             <span className="message-content">{msg.message}</span>
           </div>
         ))}
-        <div ref={messagesEndRef} />
       </div>
       <div className="chat-input">
         <input
