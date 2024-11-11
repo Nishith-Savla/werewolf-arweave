@@ -39,7 +39,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
 	const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null);
 	const [joinedPlayers, setJoinedPlayers] = useState<Player[]>([]);
 	const [gameState, setGamestate] = useState<GameTypeState>({
-		gameProcess: "hvWU6L4AzaP5zy_5syA6Hn2IHEgzQdimUZSsEmkHheY",
+		gameProcess: "CJxFtCXY3p0YsQlVBzc-5lJL3Q8g7H1YlRKG2rnpS0k",
 		phase: GamePhase.Lobby,
 		currentRound: 0,
 		currentTimestamp: 0,
