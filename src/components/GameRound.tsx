@@ -4,6 +4,7 @@ import { useGameContext } from "../context/GameContext";
 import { dryrunResult, messageResult } from "../lib/utils";
 import { GameNotifications } from "./GameNotifications";
 import "./GameRound.css";
+import { ChatRoom } from "./ChatRoom";
 
 interface DebugInfo {
 	gameState: any;
@@ -540,6 +541,8 @@ export const GameRound = () => {
 					<pre className="text-sm">{JSON.stringify(debugInfo, null, 2)}</pre>
 				</div>
 			)}
+			
+			<ChatRoom />
 		</div>
 	);
 };

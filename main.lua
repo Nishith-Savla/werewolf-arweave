@@ -1001,3 +1001,54 @@ function CheckGameEnd()
     
     return false
 end
+
+-- Store chat messages in a table
+admin:exec([[
+  CREATE TABLE IF NOT EXISTS chat_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    player_id TEXT NOT NULL,
+    player_name TEXT NOT NULL,
+    message TEXT NOT NULL,
+    timestamp INTEGER NOT NULL,
+    FOREIGN KEY(player_id) REFERENCES players(id)
+  );
+]])
+
+-- Send chat message handler
+Handlers.add(
+  "Send-Chat-Message",
+  "Send-Chat-Message",
+  function(msg)
+    -- Check if player is alive
+    local player = admin:select('SELECT name, is_alive FROM players WHERE id = ?;', { msg.From })
+    if #player == 0 or not player[1].is_alive then
+      msg.reply({ Data = "Dead players cannot send messages" })
+      return
+    end
+
+    -- Insert message
+    admin:apply(
+      'INSERT INTO chat_messages (player_id, player_name, message, timestamp) VALUES (?, ?, ?, ?);',
+      { msg.From, player[1].name, msg.Tags.Message, msg.Timestamp }
+    )
+    
+    msg.reply({ Data = "Message sent" })
+  end
+)
+
+-- Get chat messages handler
+Handlers.add(
+  "Get-Chat-Messages",
+  "Get-Chat-Messages",
+  function(msg)
+    -- Get recent messages (last 50)
+    local messages = admin:exec([[
+      SELECT player_id, player_name, message, timestamp 
+      FROM chat_messages 
+      ORDER BY timestamp DESC 
+      LIMIT 50
+    ]])
+    
+    msg.reply({ Data = json.encode(messages) })
+  end
+)
