@@ -67,6 +67,16 @@ export const ChatRoom = () => {
     }
   };
 
+  const formatTimestamp = (timestamp: number) => {
+    const date = new Date(timestamp * 1000); // Convert Unix timestamp to milliseconds
+    return date.toLocaleTimeString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'Asia/Kolkata'
+    });
+  };
+
   return (
     <div className="chat-room">
       <div className="chat-messages">
@@ -75,7 +85,10 @@ export const ChatRoom = () => {
             key={index}
             className={`message ${msg.playerId === currentPlayer?.id ? 'own-message' : ''}`}
           >
-            <span className="player-name">{msg.playerName}:</span>
+            <div className="message-header">
+              <span className="player-name">{msg.playerName}</span>
+              <span className="message-time">{formatTimestamp(msg.timestamp)}</span>
+            </div>
             <span className="message-content">{msg.message}</span>
           </div>
         ))}
