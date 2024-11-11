@@ -6,64 +6,68 @@ import "./GameBoard.css";
 import PlayerList from "./PlayerList";
 
 interface GameBoardProps {
-	currentPlayer: Player;
+  currentPlayer: Player;
 }
 
 export default function GameBoard({ currentPlayer }: GameBoardProps) {
-	const { gameState, setGamestate } = useGameContext();
-	const [players, setPlayers] = useState<Player[]>([]);
-	const [isLoading, setIsLoading] = useState(true);
+  const { gameState, setGamestate } = useGameContext();
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-	useEffect(() => {
-		const fetchGameData = async () => {
-			try {
-				// Fetch game state
-				const state = await dryrunResult(gameState.gameProcess, [
-					{
-						name: "Action",
-						value: "Get-Game-State",
-					},
-				]);
+  useEffect(() => {
+    const fetchGameData = async () => {
+      try {
+        // Fetch game state
+        const state = await dryrunResult(gameState.gameProcess, [
+          {
+            name: "Action",
+            value: "Get-Game-State",
+          },
+        ]);
 
-				// Fetch players
-				const playerList = await dryrunResult(gameState.gameProcess, [
-					{
-						name: "Action",
-						value: "Get-Players",
-					},
-				]);
+        // Fetch players
+        const playerList = await dryrunResult(gameState.gameProcess, [
+          {
+            name: "Action",
+            value: "Get-Players",
+          },
+        ]);
 
-				if (Array.isArray(playerList)) {
-					setPlayers(playerList);
-				}
+        if (Array.isArray(playerList)) {
+          setPlayers(playerList);
+        }
 
-				setGamestate((prevState) => ({
-					...prevState,
-					...state,
-				}));
-			} catch (error) {
-				console.error("Error fetching game data:", error);
-			} finally {
-				setIsLoading(false);
-			}
-		};
+        setGamestate((prevState) => ({
+          ...prevState,
+          ...state,
+        }));
+      } catch (error) {
+        console.error("Error fetching game data:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-		const interval = setInterval(fetchGameData, 5000);
-		return () => clearInterval(interval);
-	}, [gameState.gameProcess, setGamestate]);
+    const interval = setInterval(fetchGameData, 5000);
+    return () => clearInterval(interval);
+  }, [gameState.gameProcess, setGamestate]);
 
-	if (isLoading) {
-		return <div>Loading game state...</div>;
-	}
+  if (isLoading) {
+    return <div>Loading game state...</div>;
+  }
 
-	return (
-		<div className="game-board">
-			<div className="game-info">
-				<h2>Phase: {gameState?.phase}</h2>
-				<h3>Round: {gameState?.currentRound}</h3>
-			</div>
+  return (
+    <div className="game-board">
+      <div className="game-info">
+        <h2>Phase: {gameState?.phase}</h2>
+        <h3>Round: {gameState?.currentRound}</h3>
+      </div>
 
-			<PlayerList players={players} currentPlayer={currentPlayer} gamePhase={gameState?.phase} />
-		</div>
-	);
+      <PlayerList
+        players={players}
+        currentPlayer={currentPlayer}
+        gamePhase={gameState?.phase}
+      />
+    </div>
+  );
 }

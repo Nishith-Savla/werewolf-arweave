@@ -1,290 +1,319 @@
 import { Button } from "@/components/ui/button";
-import { GameState, GamePhase, phaseToUIState, UIState, Player } from "@/types/game";
+import {
+  GameState,
+  GamePhase,
+  phaseToUIState,
+  UIState,
+  Player,
+} from "@/types/game";
 import { useCallback, useEffect, useState } from "react";
 import { useGameContext } from "../context/GameContext";
 import { dryrunResult, messageResult } from "../lib/utils";
 import "./WaitingRoom.css";
 
 export const WaitingRoom = () => {
-	const {
-		currentPlayer,
-		joinedPlayers,
-		setJoinedPlayers,
-		setMode,
-		gameState,
-		setGamestate,
-		setCurrentPlayer,
-	} = useGameContext();
-	const [isLoading, setIsLoading] = useState(true);
+  const {
+    currentPlayer,
+    joinedPlayers,
+    setJoinedPlayers,
+    setMode,
+    gameState,
+    setGamestate,
+    setCurrentPlayer,
+  } = useGameContext();
+  const [isLoading, setIsLoading] = useState(true);
 
-	console.log("Current player:", currentPlayer);
-	console.log("Is creator:", currentPlayer?.isCreator);
+  console.log("Current player:", currentPlayer);
+  console.log("Is creator:", currentPlayer?.isCreator);
 
-	const fetchPlayers = useCallback(async () => {
-		try {
-			console.log("Fetching players for process:", gameState.gameProcess);
-			const gameStateResult = await dryrunResult(gameState.gameProcess, [
-				{
-					name: "Action",
-					value: "Get-Game-State",
-				},
-			]);
-			console.log("Game state result:", gameStateResult);
-			
-			// Check for both Night and Day phases
-			if (gameStateResult?.phase === GamePhase.Night || gameStateResult?.phase === GamePhase.Day) {
-				setGamestate((prevState: GameState) => ({
-					...prevState,
-					phase: gameStateResult.phase,
-				}));
-				setMode(phaseToUIState(gameStateResult.phase));
-				setIsLoading(false);
-				return;
-			}
+  const fetchPlayers = useCallback(async () => {
+    try {
+      console.log("Fetching players for process:", gameState.gameProcess);
+      const gameStateResult = await dryrunResult(gameState.gameProcess, [
+        {
+          name: "Action",
+          value: "Get-Game-State",
+        },
+      ]);
+      console.log("Game state result:", gameStateResult);
 
-			if (gameStateResult?.phase === GamePhase.Lobby) {
-				const result = await dryrunResult(gameState.gameProcess, [
-					{
-						name: "Action",
-						value: "Get-Players",
-					},
-				]);
+      // Check for both Night and Day phases
+      if (
+        gameStateResult?.phase === GamePhase.Night ||
+        gameStateResult?.phase === GamePhase.Day
+      ) {
+        setGamestate((prevState: GameState) => ({
+          ...prevState,
+          phase: gameStateResult.phase,
+        }));
+        setMode(phaseToUIState(gameStateResult.phase));
+        setIsLoading(false);
+        return;
+      }
 
-				console.log("Raw players result:", result);
+      if (gameStateResult?.phase === GamePhase.Lobby) {
+        const result = await dryrunResult(gameState.gameProcess, [
+          {
+            name: "Action",
+            value: "Get-Players",
+          },
+        ]);
 
-				if (result && Array.isArray(result)) {
-					const validPlayers = result
-						.filter((player) => !!player)
-						.map((player) => ({
-							id: player.id || player.address || "",
-							name: player.name || player.displayName || "",
-							isCreator: Boolean(player.is_creator),
-							isAlive: true,
-						}))
-						.filter((player) => player.id && player.name);
+        console.log("Raw players result:", result);
 
-					console.log("Mapped players:", validPlayers);
+        if (result && Array.isArray(result)) {
+          const validPlayers = result
+            .filter((player) => !!player)
+            .map((player) => ({
+              id: player.id || player.address || "",
+              name: player.name || player.displayName || "",
+              isCreator: Boolean(player.is_creator),
+              isAlive: true,
+            }))
+            .filter((player) => player.id && player.name);
 
-					// Update current player's creator status if needed
-					if (currentPlayer) {
-						const playerData = validPlayers.find((p) => p.id === currentPlayer.id);
-						console.log("Found player data:", playerData);
+          console.log("Mapped players:", validPlayers);
 
-						if (playerData?.isCreator !== currentPlayer.isCreator) {
-							setCurrentPlayer(
-								(prev) =>
-									({
-										...prev!,
-										isCreator: playerData?.isCreator || false,
-									} as Player)
-							);
-						}
-					}
+          // Update current player's creator status if needed
+          if (currentPlayer) {
+            const playerData = validPlayers.find(
+              (p) => p.id === currentPlayer.id,
+            );
+            console.log("Found player data:", playerData);
 
-					setJoinedPlayers(validPlayers);
-				}
-			}
-			setIsLoading(false);
-		} catch (error) {
-			console.error("Error in fetchPlayers:", error);
-			setIsLoading(false);
-		}
-	}, [gameState.gameProcess, currentPlayer, setCurrentPlayer, setGamestate, setMode]);
+            if (playerData?.isCreator !== currentPlayer.isCreator) {
+              setCurrentPlayer(
+                (prev) =>
+                  ({
+                    ...prev!,
+                    isCreator: playerData?.isCreator || false,
+                  }) as Player,
+              );
+            }
+          }
 
-	useEffect(() => {
-		if (!gameState.gameProcess) return;
+          setJoinedPlayers(validPlayers);
+        }
+      }
+      setIsLoading(false);
+    } catch (error) {
+      console.error("Error in fetchPlayers:", error);
+      setIsLoading(false);
+    }
+  }, [
+    gameState.gameProcess,
+    currentPlayer,
+    setCurrentPlayer,
+    setGamestate,
+    setMode,
+  ]);
 
-		// Initial fetch
-		fetchPlayers();
+  useEffect(() => {
+    if (!gameState.gameProcess) return;
 
-		// Set up interval
-		const interval = setInterval(fetchPlayers, 10000);
+    // Initial fetch
+    fetchPlayers();
 
-		// Cleanup
-		return () => {
-			clearInterval(interval);
-		};
-	}, [gameState.gameProcess, fetchPlayers]);
+    // Set up interval
+    const interval = setInterval(fetchPlayers, 10000);
 
-	useEffect(() => {
-		const checkRegistration = async () => {
-			if (!currentPlayer?.id) {
-				console.log("No player ID found, redirecting to landing");
-				setMode(UIState.Landing);
-				return;
-			}
+    // Cleanup
+    return () => {
+      clearInterval(interval);
+    };
+  }, [gameState.gameProcess, fetchPlayers]);
 
-			try {
-				const result = await dryrunResult(
-					gameState.gameProcess,
-					[
-						{
-							name: "Action",
-							value: "Get-Players",
-						},
-					],
-					{ address: currentPlayer.id }
-				);
+  useEffect(() => {
+    const checkRegistration = async () => {
+      if (!currentPlayer?.id) {
+        console.log("No player ID found, redirecting to landing");
+        setMode(UIState.Landing);
+        return;
+      }
 
-				const playerExists = result?.some((player: any) => player.id === currentPlayer.id);
+      try {
+        const result = await dryrunResult(
+          gameState.gameProcess,
+          [
+            {
+              name: "Action",
+              value: "Get-Players",
+            },
+          ],
+          { address: currentPlayer.id },
+        );
 
-				if (!playerExists) {
-					console.log("Player not registered, redirecting to landing");
-					setMode(UIState.Landing);
-				}
+        const playerExists = result?.some(
+          (player: any) => player.id === currentPlayer.id,
+        );
 
-				console.log("Player registration check result:", result);
-			} catch (error) {
-				console.error("Error checking registration:", error);
-				setMode(UIState.Landing);
-			}
-		};
+        if (!playerExists) {
+          console.log("Player not registered, redirecting to landing");
+          setMode(UIState.Landing);
+        }
 
-		checkRegistration();
-	}, [gameState.gameProcess, setMode, currentPlayer?.id]);
+        console.log("Player registration check result:", result);
+      } catch (error) {
+        console.error("Error checking registration:", error);
+        setMode(UIState.Landing);
+      }
+    };
 
-	useEffect(() => {
-		if (!currentPlayer?.isCreator) {
-			const checkGameState = async () => {
-				try {
-					const gameStateResult = await dryrunResult(gameState.gameProcess, [
-						{
-							name: "Action",
-							value: "Get-Game-State",
-						},
-					]);
+    checkRegistration();
+  }, [gameState.gameProcess, setMode, currentPlayer?.id]);
 
-					// Check for both Night and Day phases
-					if (gameStateResult?.phase === GamePhase.Night || gameStateResult?.phase === GamePhase.Day) {
-						setGamestate((prev) => ({
-							...prev,
-							phase: gameStateResult.phase,
-						}));
-						setMode(phaseToUIState(gameStateResult.phase));
-					}
-				} catch (error) {
-					console.error("Error checking game state:", error);
-				}
-			};
+  useEffect(() => {
+    if (!currentPlayer?.isCreator) {
+      const checkGameState = async () => {
+        try {
+          const gameStateResult = await dryrunResult(gameState.gameProcess, [
+            {
+              name: "Action",
+              value: "Get-Game-State",
+            },
+          ]);
 
-			const interval = setInterval(checkGameState, 5000);
-			return () => clearInterval(interval);
-		}
-	}, [currentPlayer?.isCreator, gameState.gameProcess, setGamestate, setMode]);
+          // Check for both Night and Day phases
+          if (
+            gameStateResult?.phase === GamePhase.Night ||
+            gameStateResult?.phase === GamePhase.Day
+          ) {
+            setGamestate((prev) => ({
+              ...prev,
+              phase: gameStateResult.phase,
+            }));
+            setMode(phaseToUIState(gameStateResult.phase));
+          }
+        } catch (error) {
+          console.error("Error checking game state:", error);
+        }
+      };
 
-	const handleStartGame = async () => {
-		if (!currentPlayer?.isCreator) {
-			console.warn("Only creator can start the game");
-			return;
-		}
+      const interval = setInterval(checkGameState, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [currentPlayer?.isCreator, gameState.gameProcess, setGamestate, setMode]);
 
-		try {
-			setIsLoading(true);
-			console.log("Starting game...");
+  const handleStartGame = async () => {
+    if (!currentPlayer?.isCreator) {
+      console.warn("Only creator can start the game");
+      return;
+    }
 
-			// Start the game
-			const startResult = await messageResult(gameState.gameProcess, [
-				{
-					name: "Action",
-					value: "Start-Game",
-				},
-			]);
+    try {
+      setIsLoading(true);
+      console.log("Starting game...");
 
-			console.log("Start game response:", startResult);
+      // Start the game
+      const startResult = await messageResult(gameState.gameProcess, [
+        {
+          name: "Action",
+          value: "Start-Game",
+        },
+      ]);
 
-			// Verify game state
-			const gameStateResult = await dryrunResult(gameState.gameProcess, [
-				{
-					name: "Action",
-					value: "Get-Game-State",
-				},
-			]);
+      console.log("Start game response:", startResult);
 
-			console.log("Game state after state:", gameStateResult);
+      // Verify game state
+      const gameStateResult = await dryrunResult(gameState.gameProcess, [
+        {
+          name: "Action",
+          value: "Get-Game-State",
+        },
+      ]);
 
-			if (gameStateResult?.phase === GamePhase.Night) {
-				// Update game state first
-				setGamestate((prevState: GameState) => ({
-					...prevState,
-					phase: GamePhase.Night,
-				}));
+      console.log("Game state after state:", gameStateResult);
 
-				// Then update mode
-				setMode(phaseToUIState(GamePhase.Night));
-				setIsLoading(false);
-			} else {
-				throw new Error(`Unexpected game state: ${gameStateResult?.phase}`);
-			}
-		} catch (error: any) {
-			console.error("Error starting game:", error);
-			setIsLoading(false);
-			alert(`Failed to start game: ${error.message}`);
-		}
-	};
+      if (gameStateResult?.phase === GamePhase.Night) {
+        // Update game state first
+        setGamestate((prevState: GameState) => ({
+          ...prevState,
+          phase: GamePhase.Night,
+        }));
 
-	const handleLeaveRoom = async () => {
-		try {
-			const { Messages } = await messageResult(gameState.gameProcess, [
-				{
-					name: "Action",
-					value: "Leave-Game",
-				},
-			]);
+        // Then update mode
+        setMode(phaseToUIState(GamePhase.Night));
+        setIsLoading(false);
+      } else {
+        throw new Error(`Unexpected game state: ${gameStateResult?.phase}`);
+      }
+    } catch (error: any) {
+      console.error("Error starting game:", error);
+      setIsLoading(false);
+      alert(`Failed to start game: ${error.message}`);
+    }
+  };
 
-			if (Messages?.[0]?.Data === "Left game") {
-				// Reset player state
-				setCurrentPlayer(null);
-				// Reset game state to initial values
-				setGamestate((prevState: GameState) => ({
-					...prevState,
-					phase: GamePhase.Lobby,
-				}));
-				// Clear joined players
-				setJoinedPlayers([]);
-				// Navigate back to landing
-				setMode(UIState.Landing);
-			}
-		} catch (error) {
-			console.error("Error leaving room:", error);
-		}
-	};
+  const handleLeaveRoom = async () => {
+    try {
+      const { Messages } = await messageResult(gameState.gameProcess, [
+        {
+          name: "Action",
+          value: "Leave-Game",
+        },
+      ]);
 
-	if (isLoading) {
-		return <div className="waiting-room">Loading...</div>;
-	}
+      if (Messages?.[0]?.Data === "Left game") {
+        // Reset player state
+        setCurrentPlayer(null);
+        // Reset game state to initial values
+        setGamestate((prevState: GameState) => ({
+          ...prevState,
+          phase: GamePhase.Lobby,
+        }));
+        // Clear joined players
+        setJoinedPlayers([]);
+        // Navigate back to landing
+        setMode(UIState.Landing);
+      }
+    } catch (error) {
+      console.error("Error leaving room:", error);
+    }
+  };
 
-	return (
-		<div className="waiting-room">
-			<h2 className="text-2xl font-bold mb-6">Waiting Room</h2>
+  if (isLoading) {
+    return <div className="waiting-room">Loading...</div>;
+  }
 
-			<div className="players-list mb-6">
-				<h3 className="text-xl mb-4">Players ({joinedPlayers.length}/8)</h3>
-				{joinedPlayers.map((player) => (
-					<div key={player.id} className="player-card">
-						<span>{player.name}</span>
-						{player.isCreator && <span className="creator-badge">Creator</span>}
-					</div>
-				))}
-			</div>
+  return (
+    <div className="waiting-room">
+      <h2 className="text-2xl font-bold mb-6">Waiting Room</h2>
 
-			<div className="actions flex gap-4 justify-center mt-8">
-				<Button
-					onClick={handleStartGame}
-					disabled={joinedPlayers.length < 4 || !currentPlayer?.isCreator}
-					className="px-8"
-					variant="default"
-					size="lg"
-				>
-					{currentPlayer?.isCreator
-						? `Start Game ${
-								joinedPlayers.length < 4 ? `(Need ${4 - joinedPlayers.length} more)` : ""
-						  }`
-						: "Waiting for creator to start..."}
-				</Button>
-				<Button onClick={handleLeaveRoom} variant="outline" size="lg" className="px-8">
-					Leave Room
-				</Button>
-			</div>
-		</div>
-	);
+      <div className="players-list mb-6">
+        <h3 className="text-xl mb-4">Players ({joinedPlayers.length}/8)</h3>
+        {joinedPlayers.map((player) => (
+          <div key={player.id} className="player-card">
+            <span>{player.name}</span>
+            {player.isCreator && <span className="creator-badge">Creator</span>}
+          </div>
+        ))}
+      </div>
+
+      <div className="actions flex gap-4 justify-center mt-8">
+        <Button
+          onClick={handleStartGame}
+          disabled={joinedPlayers.length < 4 || !currentPlayer?.isCreator}
+          className="px-8"
+          variant="default"
+          size="lg"
+        >
+          {currentPlayer?.isCreator
+            ? `Start Game ${
+                joinedPlayers.length < 4
+                  ? `(Need ${4 - joinedPlayers.length} more)`
+                  : ""
+              }`
+            : "Waiting for creator to start..."}
+        </Button>
+        <Button
+          onClick={handleLeaveRoom}
+          variant="outline"
+          size="lg"
+          className="px-8"
+        >
+          Leave Room
+        </Button>
+      </div>
+    </div>
+  );
 };

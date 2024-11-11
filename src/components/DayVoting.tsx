@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Player } from '../types/game';
+import { useState } from "react";
+import { Player } from "../types/game";
 
 interface DayVotingProps {
   currentPlayer: Player;
@@ -11,15 +11,15 @@ export default function DayVoting({ currentPlayer, players }: DayVotingProps) {
 
   const handleVote = async (targetId: string) => {
     try {
-      await fetch('/api/vote', {
-        method: 'POST',
+      await fetch("/api/vote", {
+        method: "POST",
         body: JSON.stringify({
-          votedId: targetId
-        })
+          votedId: targetId,
+        }),
       });
       setSelectedPlayer(targetId);
     } catch (error) {
-      console.error('Failed to submit vote:', error);
+      console.error("Failed to submit vote:", error);
     }
   };
 
@@ -31,12 +31,12 @@ export default function DayVoting({ currentPlayer, players }: DayVotingProps) {
     <div className="day-voting">
       <h2>Day Phase - Vote to Eliminate</h2>
       <div className="voting-buttons">
-        {players.map(player => (
+        {players.map((player) => (
           <button
             key={player.id}
             onClick={() => handleVote(player.id)}
             disabled={!currentPlayer.isAlive || selectedPlayer !== undefined}
-            className={selectedPlayer === player.id ? 'selected' : ''}
+            className={selectedPlayer === player.id ? "selected" : ""}
           >
             Vote for {player.name}
           </button>
@@ -44,4 +44,4 @@ export default function DayVoting({ currentPlayer, players }: DayVotingProps) {
       </div>
     </div>
   );
-} 
+}

@@ -1,4 +1,4 @@
-import { Player } from '../types/game';
+import { Player } from "../types/game";
 
 interface NightActionsProps {
   currentPlayer: Player;
@@ -10,18 +10,22 @@ interface NightActionsProps {
   };
 }
 
-export default function NightActions({ currentPlayer, players, nightActionsComplete }: NightActionsProps) {
+export default function NightActions({
+  currentPlayer,
+  players,
+  nightActionsComplete,
+}: NightActionsProps) {
   const handleAction = async (targetId: string, actionType: string) => {
     try {
-      await fetch('/api/night-action', {
-        method: 'POST',
+      await fetch("/api/night-action", {
+        method: "POST",
         body: JSON.stringify({
           Target: targetId,
-          ActionType: actionType
-        })
+          ActionType: actionType,
+        }),
       });
     } catch (error) {
-      console.error('Failed to perform night action:', error);
+      console.error("Failed to perform night action:", error);
     }
   };
 
@@ -31,17 +35,17 @@ export default function NightActions({ currentPlayer, players, nightActionsCompl
 
   const renderActionButtons = () => {
     switch (currentPlayer.role) {
-      case 'werewolf':
+      case "werewolf":
         if (nightActionsComplete.werewolf) {
           return <div>You've completed your action</div>;
         }
         return (
           <div className="action-buttons">
             <h3>Choose a player to kill:</h3>
-            {players.map(player => (
-              <button 
+            {players.map((player) => (
+              <button
                 key={player.id}
-                onClick={() => handleAction(player.id, 'kill')}
+                onClick={() => handleAction(player.id, "kill")}
                 disabled={player.id === currentPlayer.id}
               >
                 Kill {player.name}
@@ -50,17 +54,17 @@ export default function NightActions({ currentPlayer, players, nightActionsCompl
           </div>
         );
 
-      case 'doctor':
+      case "doctor":
         if (nightActionsComplete.doctor) {
           return <div>You've completed your action</div>;
         }
         return (
           <div className="action-buttons">
             <h3>Choose a player to protect:</h3>
-            {players.map(player => (
-              <button 
+            {players.map((player) => (
+              <button
                 key={player.id}
-                onClick={() => handleAction(player.id, 'protect')}
+                onClick={() => handleAction(player.id, "protect")}
               >
                 Protect {player.name}
               </button>
@@ -68,17 +72,17 @@ export default function NightActions({ currentPlayer, players, nightActionsCompl
           </div>
         );
 
-      case 'seer':
+      case "seer":
         if (nightActionsComplete.seer) {
           return <div>You've completed your action</div>;
         }
         return (
           <div className="action-buttons">
             <h3>Choose a player to reveal their role:</h3>
-            {players.map(player => (
-              <button 
+            {players.map((player) => (
+              <button
                 key={player.id}
-                onClick={() => handleAction(player.id, 'see')}
+                onClick={() => handleAction(player.id, "see")}
                 disabled={player.id === currentPlayer.id}
               >
                 See {player.name}'s role
@@ -98,4 +102,4 @@ export default function NightActions({ currentPlayer, players, nightActionsCompl
       {renderActionButtons()}
     </div>
   );
-} 
+}
