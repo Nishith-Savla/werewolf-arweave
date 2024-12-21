@@ -19,10 +19,6 @@ An online multiplayer game where players take on secret roles as either **villag
 
 In this game, players are assigned roles of either villagers or werewolves at random. Villagers must work together to identify the werewolves hiding among them before it’s too late, while the werewolves must work covertly to eliminate villagers one by one without getting discovered. The game harnesses the power of Arweave's decentralized data storage to store every move, alliance, and betrayal immutably, ensuring a transparent and uncheatable experience.
 
-## Deployment URL
-
-[Werewolf.AO](https://werewolf-arweave_arlink.ar-io.dev/)
-
 ## Gameplay
 
 ### Roles
